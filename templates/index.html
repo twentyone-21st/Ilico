@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ilico — Filtro Inteligente de Correo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=Manrope:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<div class="app-shell">
+
+  <aside class="sidebar">
+    <div class="logo">
+      <div class="logo-mark">
+        <div class="logo-icon">🛡️</div>
+        <span class="logo-name">Ilico</span>
+      </div>
+      <div class="logo-sub">NLP + Machine Learning · ITLA</div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-label">Bandeja</div>
+      <button class="nav-categoria active" onclick="cambiarCategoria('principal', this)">
+        <span class="cat-icon">📥</span> Principal
+        <span class="cat-badge" id="badge-principal">—</span>
+      </button>
+      <button class="nav-categoria" onclick="cambiarCategoria('archivados', this)">
+        <span class="cat-icon">🗄️</span> Archivados
+        <span class="cat-badge" id="badge-archivados">—</span>
+      </button>
+
+      <div class="nav-label" style="margin-top:8px">Herramientas</div>
+      <button class="nav-btn" onclick="mostrarSeccion('clasificar', this)">
+        <span class="icon">🔍</span> Clasificar texto
+      </button>
+      <button class="nav-btn" onclick="mostrarSeccion('aprender', this)">
+        <span class="icon">🧠</span> Enseñar al sistema
+      </button>
+    </nav>
+
+  </aside>
+
+  <div style="display:flex;flex-direction:column;min-height:100vh;margin-left:260px;width:calc(100% - 260px);">
+
+    <header class="topbar">
+      <div class="topbar-title" id="topbar-title">Bandeja de entrada</div>
+      <div class="topbar-right">
+        <div class="user-badge" id="user-badge">
+          <div class="user-dot" id="user-dot" style="background:var(--text-2)"></div>
+          <span id="user-email">Conectando...</span>
+        </div>
+        {% if autenticado %}
+        <a href="/auth/logout" id="btn-logout" class="btn btn-ghost" style="font-size:12px;padding:7px 14px">Cerrar sesión</a>
+        {% endif %}
+      </div>
+    </header>
+
+    <main class="main">
+
+      <section id="sec-bandeja" class="section visible">
+
+        {% if not autenticado %}
+        <div class="connect-banner">
+          <div class="connect-icon">📬</div>
+          <div class="connect-title">Conecta tu Gmail</div>
+          <div class="connect-sub">Autoriza el acceso para que Ilico analice y clasifique tus correos con inteligencia artificial.</div>
+          <a href="/auth/gmail" class="btn-google">
+            <svg width="20" height="20" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            Conectar con Google
+          </a>
+        </div>
+        {% endif %}
+
+        <div class="table-wrap">
+          <div class="table-header">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="table-title">Análisis de correos</div>
+              <div id="refresh-indicator" style="display:none;align-items:center;gap:6px;font-size:11px;color:var(--text-2);">
+                <div style="width:7px;height:7px;border-radius:50%;background:var(--ham);box-shadow:0 0 6px var(--ham-glow);animation:pulse 2s infinite;contain:layout;"></div>
+                En vivo
+              </div>
+            </div>
+            <div class="table-actions">
+              <button class="btn btn-primary" id="btn-cargar" onclick="cargarCorreos(true)" {% if not autenticado %}disabled{% endif %}>
+                {% if autenticado %}Actualizar{% else %}Conecta Gmail primero{% endif %}
+              </button>
+            </div>
+          </div>
+
+
+
+          <div id="tabla-contenido">
+            <div class="empty">
+              <div class="empty-icon">📭</div>
+              <div>Cargando tus correos...</div>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+      <section id="sec-clasificar" class="section">
+        <div class="classify-panel">
+          <div class="panel-title">Clasificar texto</div>
+          <div class="panel-sub">Pega o escribe cualquier mensaje para analizarlo con el modelo.</div>
+          <div class="classify-form">
+            <textarea id="txt-input" placeholder="Escribe o pega aquí el mensaje que quieres clasificar..."></textarea>
+            <div>
+              <button type="button" class="btn btn-primary" id="btn-clasificar" onclick="clasificarTexto()">Analizar mensaje</button>
+            </div>
+            <div class="result-box" id="result-box">
+              <div class="result-main">
+                <div class="result-icon" id="r-icon"></div>
+                <div>
+                  <div class="result-title" id="r-clas"></div>
+                  <div class="result-conf"  id="r-conf"></div>
+                </div>
+              </div>
+              <div class="prob-row">
+                <div class="prob-item">
+                  <div class="prob-label">Probabilidad SPAM</div>
+                  <div class="prob-value spam" id="r-pspam">—</div>
+                </div>
+                <div class="prob-item">
+                  <div class="prob-label">Probabilidad HAM</div>
+                  <div class="prob-value ham" id="r-pham">—</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="sec-aprender" class="section">
+        <div class="feedback-panel">
+          <div class="panel-title">Enseñar al sistema</div>
+          <div class="panel-sub">Agrega, edita o elimina palabras clave para afinar las clasificaciones en tiempo real.</div>
+
+          <div class="feedback-form">
+            <input type="text" id="fb-palabra" placeholder="Escribe una palabra clave..." onkeydown="if(event.key==='Enter')enviarFeedback()">
+            <div class="tipo-select">
+              <button class="tipo-btn spam" id="btn-spam-tipo" onclick="selTipo('spam')">SPAM</button>
+              <button class="tipo-btn ham"  id="btn-ham-tipo"  onclick="selTipo('ham')">HAM</button>
+            </div>
+            <button class="btn btn-primary" onclick="enviarFeedback()">Agregar</button>
+          </div>
+
+          <div class="feedback-resumen">
+            <div class="feedback-resumen-item">
+              <span class="feedback-resumen-label">Palabras SPAM enseñadas</span>
+              <span class="feedback-resumen-value spam" id="teach-spam-count">0</span>
+            </div>
+            <div class="feedback-resumen-item">
+              <span class="feedback-resumen-label">Palabras HAM enseñadas</span>
+              <span class="feedback-resumen-value ham" id="teach-ham-count">0</span>
+            </div>
+          </div>
+
+          <div class="correcciones-seccion">
+            <div class="correcciones-grid">
+              <div class="correcciones-grupo">
+                <div class="correcciones-grupo-header">
+                  <div class="correcciones-grupo-title">
+                    <span>🚫</span>
+                    <span style="color:var(--spam)">Palabras SPAM</span>
+                  </div>
+                  <span class="correcciones-grupo-count count-spam" id="count-spam-label">0</span>
+                </div>
+                <ul class="correcciones-lista" id="lista-spam">
+                  <li class="correcciones-empty" id="empty-spam">Aún no has agregado palabras de SPAM.</li>
+                </ul>
+              </div>
+
+              <div class="correcciones-grupo">
+                <div class="correcciones-grupo-header">
+                  <div class="correcciones-grupo-title">
+                    <span>✅</span>
+                    <span style="color:var(--ham)">Palabras HAM</span>
+                  </div>
+                  <span class="correcciones-grupo-count count-ham" id="count-ham-label">0</span>
+                </div>
+                <ul class="correcciones-lista" id="lista-ham">
+                  <li class="correcciones-empty" id="empty-ham">Aún no has agregado palabras de HAM.</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="modal-overlay" onclick="cerrarModal(event)">
+    <div class="modal" id="modal">
+      <div class="modal-header">
+        <div class="modal-asunto" id="modal-asunto">Cargando...</div>
+        <button class="modal-close" onclick="cerrarModalBtn()">✕</button>
+      </div>
+      <div class="modal-meta" id="modal-meta">
+        <div class="modal-meta-item">
+          <span class="modal-meta-label">De</span>
+          <span class="modal-meta-value" id="modal-remite">—</span>
+        </div>
+        <div class="modal-meta-item">
+          <span class="modal-meta-label">Fecha</span>
+          <span class="modal-meta-value" id="modal-fecha">—</span>
+        </div>
+      </div>
+      <div class="modal-clas-row" id="modal-clas-row">
+        <span id="modal-badge"></span>
+        <span class="modal-razon" id="modal-razon"></span>
+      </div>
+      <div class="modal-body" id="modal-body">
+        <div class="modal-loading">
+          <div class="spinner"></div>
+          Cargando contenido del correo...
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="cerrarModalBtn()">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="feedback-panel-modal" id="fpm">
+  <div class="fpm-header">🤖 Verificación de clasificación</div>
+  <div class="fpm-body">
+    <div class="fpm-pregunta" id="fpm-pregunta">
+      ¿Ilico clasificó este correo correctamente?
+    </div>
+    <div class="fpm-btn-row">
+      <button class="fpm-btn correcto"   onclick="fpmRespuesta(true)">✅ Sí, correcto</button>
+      <button class="fpm-btn incorrecto" onclick="fpmRespuesta(false)">❌ No, corregir</button>
+    </div>
+    <div class="fpm-correccion" id="fpm-correccion">
+      <div class="fpm-label">¿Cuál era la clasificación correcta?</div>
+      <div class="fpm-tipo-row">
+        <button class="fpm-tipo-btn spam" id="fpm-tipo-spam" onclick="fpmSelTipo('spam')">SPAM</button>
+        <button class="fpm-tipo-btn ham"  id="fpm-tipo-ham"  onclick="fpmSelTipo('ham')">HAM</button>
+      </div>
+      <div class="fpm-label" style="margin-top:4px">Palabra clave a añadir a la base de datos:</div>
+      <input class="fpm-input" id="fpm-palabra" placeholder="ej: banco, transferencia, saldo (separadas por comas)"
+             onkeydown="if(event.key==='Enter')fpmGuardar()">
+      <button class="fpm-guardar" onclick="fpmGuardar()">Guardar y entrenar al modelo</button>
+    </div>
+    <div class="fpm-ok" id="fpm-ok">✅ ¡Gracias! El modelo ha aprendido de tu corrección.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

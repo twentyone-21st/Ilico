@@ -1,0 +1,22 @@
+credentials.json
+token.json
+*.pkl
+__pycache__/
+*.pyc
+.env
+correcciones_usuario.json
+feedback_correos.json
+traduccion_checkpoint.json
+
+# Modelos de traducción locales (muy pesados, no se usan en producción)
+nllb_model/
+opus_model/
+
+# Archivos de entrenamiento locales
+traduccion_checkpoint.json
+
+# Claude Code
+.claude/
+
+# Archivos de sesión y runtime
+*.log

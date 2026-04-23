@@ -19,12 +19,14 @@ Ilico se conecta a tu cuenta de Gmail mediante OAuth2 y clasifica automáticamen
 ## Características principales
 
 - **Autenticación segura** con Google OAuth2
-- **Clasificador NLP** basado en TF-IDF + Naive Bayes entrenado con miles de correos reales
+- **Clasificador NLP** basado en TF-IDF + Naive Bayes entrenado con miles de correos reales en español
+- **Dataset interno amplio**: 10 categorías HAM y 10 categorías SPAM cubriendo banca, redes sociales, trabajo, educación, salud, gobierno, extorsión, hackers, fraudes y amenazas
 - **Reglas inteligentes** por dominio: bancos dominicanos y servicios globales de confianza
 - **Detección de estafas** mediante patrones léxicos de alto riesgo
-- **Aprendizaje del usuario**: el modelo se ajusta con las correcciones que tú aportas
+- **Correcciones del usuario con prioridad absoluta**: el feedback del usuario nunca es ignorado por el sistema
 - **Panel en tiempo real** con polling automático cada 5 segundos
 - **Nivel de confianza** visual por correo (Arriesgado → Seguro)
+- **Sesión limpia tras cada deploy**: Railway cierra la sesión automáticamente al publicar cambios
 
 ---
 

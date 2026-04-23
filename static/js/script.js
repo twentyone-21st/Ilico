@@ -1,14 +1,16 @@
-let todosLosCorreos = [];
+// == ESTADO GLOBAL ==
+let todosLosCorreos = [];       // Lista completa de correos de la categoría activa
 let categoriaActiva = 'principal';
 let tipoFeedback    = 'spam';
-let intervaloAuto   = null;
-let _mapaCorreos    = {};
+let intervaloAuto   = null;     // Referencia al setInterval del polling
+let _mapaCorreos    = {};       // Índice id→correo para acceso rápido al abrir un modal
 let _fpmTipo        = 'spam';
 let _fpmCorreoId    = null;
 let _cargandoFondo  = false;
 let _tooltipEl      = null;
 let _correosLeidos  = new Set(JSON.parse(localStorage.getItem('ilico_leidos') || '[]'));
 
+// == INICIALIZACIÓN ==
 document.addEventListener('DOMContentLoaded', () => {
   cargarPerfil();
   cargarStats();
@@ -20,6 +22,9 @@ document.addEventListener('DOMContentLoaded', () => {
   cargarDesdeCache();
 });
 
+/**
+ * @brief Enlaza el botón de cierre de sesión para limpiar estado local antes de redirigir.
+ */
 function prepararLogout() {
   const btn = document.getElementById('btn-logout');
   if (!btn) return;
@@ -36,6 +41,9 @@ function prepararLogout() {
   });
 }
 
+/**
+ * @brief Detiene el polling automático de correos para evitar peticiones tras cerrar sesión o cambiar categoría.
+ */
 function detenerAutoRefresh() {
   if (intervaloAuto) {
     clearInterval(intervaloAuto);
@@ -43,6 +51,11 @@ function detenerAutoRefresh() {
   }
 }
 
+/**
+ * @brief Elimina correos duplicados de una lista usando el campo id como clave única.
+ * @param {Array} lista Lista de objetos correo.
+ * @return {Array} Lista sin duplicados preservando el orden de primera aparición.
+ */
 function dedup(lista) {
   const m = new Map();
   for (const c of lista || []) {
@@ -52,10 +65,18 @@ function dedup(lista) {
   return [...m.values()];
 }
 
+/**
+ * @brief Persiste las listas de correcciones en localStorage para sincronizarlas al reconectar.
+ * @param {Array} spam Lista de palabras marcadas como spam.
+ * @param {Array} ham  Lista de palabras marcadas como ham.
+ */
 function guardarCorreccionesLocal(spam, ham) {
   localStorage.setItem('ilico_correcciones', JSON.stringify({spam, ham}));
 }
 
+/**
+ * @brief Envía al servidor las correcciones guardadas en localStorage, por si el servidor se reinició.
+ */
 async function sincronizarCorreccionesAlServidor() {
   const raw = localStorage.getItem('ilico_correcciones');
   if (!raw) return;
@@ -70,6 +91,9 @@ async function sincronizarCorreccionesAlServidor() {
   } catch {}
 }
 
+/**
+ * @brief Intenta mostrar correos desde el cache del servidor antes de hacer la carga completa.
+ */
 async function cargarDesdeCache() {
   try {
     const r  = await fetch('/api/correos/cache?categoria=' + categoriaActiva);
@@ -90,6 +114,10 @@ async function cargarDesdeCache() {
   await cargarCorreos(false);
 }
 
+/**
+ * @brief Solicita correos al servidor y renderiza la tabla; muestra el spinner mientras carga.
+ * @param {boolean} forzar Si true fuerza recarga ignorando el cache del servidor.
+ */
 async function cargarCorreos(forzar = false) {
   const btn = document.getElementById('btn-cargar');
   if (btn) { btn.disabled = true; btn.textContent = 'Analizando...'; }
@@ -139,6 +167,9 @@ async function cargarCorreos(forzar = false) {
   }
 }
 
+/**
+ * @brief Inicia el polling cada 5 segundos para detectar nuevos correos sin recargar la página.
+ */
 function iniciarAutoRefresh() {
   if (intervaloAuto) return;
   const ind = document.getElementById('refresh-indicator');
@@ -170,6 +201,11 @@ function iniciarAutoRefresh() {
   }, 5000);
 }
 
+/**
+ * @brief Cambia la categoría activa (principal/archivados), limpia el estado y carga los correos correspondientes.
+ * @param {string} categoria Categoría destino: 'principal' o 'archivados'.
+ * @param {HTMLElement} btn  Botón de navegación presionado, para marcarlo como activo.
+ */
 async function cambiarCategoria(categoria, btn) {
   detenerAutoRefresh();
   todosLosCorreos = [];
@@ -217,6 +253,11 @@ async function cambiarCategoria(categoria, btn) {
   await cargarCorreos(false);
 }
 
+/**
+ * @brief Navega a una sección de herramientas (clasificar o aprender) actualizando el título del topbar.
+ * @param {string} id    ID de la sección destino ('clasificar' o 'aprender').
+ * @param {HTMLElement} btn Botón de navegación presionado.
+ */
 function mostrarSeccion(id, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -232,6 +273,9 @@ function mostrarSeccion(id, btn) {
   if (id !== 'clasificar') resetResultBox();
 }
 
+/**
+ * @brief Limpia el cuadro de resultado de clasificación manual, ocultándolo y borrando su contenido.
+ */
 function resetResultBox() {
   const box = document.getElementById('result-box');
   if (!box) return;
@@ -243,6 +287,9 @@ function resetResultBox() {
   });
 }
 
+/**
+ * @brief Consulta el perfil Gmail del usuario y muestra su email en el badge de la topbar.
+ */
 async function cargarPerfil() {
   try {
     const r = await fetch('/api/perfil');
@@ -261,6 +308,9 @@ async function cargarPerfil() {
   } catch {}
 }
 
+/**
+ * @brief Obtiene las estadísticas del modelo y actualiza los contadores de la sección "Enseñar".
+ */
 async function cargarStats() {
   try {
     const r = await fetch('/api/stats');
@@ -272,12 +322,20 @@ async function cargarStats() {
   } catch {}
 }
 
+/**
+ * @brief Actualiza el badge numérico de una categoría en el menú lateral.
+ * @param {string} categoria Categoría cuyo badge se actualiza.
+ * @param {Object} stats     Objeto con campo 'total'.
+ */
 function actualizarBadge(categoria, stats) {
   const el = document.getElementById('badge-' + categoria);
   if (el && stats && stats.total !== undefined)
     el.textContent = stats.total;
 }
 
+/**
+ * @brief Muestra o actualiza la barra con la hora de la última actualización de la tabla.
+ */
 function mostrarHoraActualizacion() {
   const hora = new Date().toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit' });
   let el = document.getElementById('last-updated-bar');
@@ -292,6 +350,13 @@ function mostrarHoraActualizacion() {
   el.textContent = `Última actualización: ${hora}`;
 }
 
+/**
+ * @brief Calcula el nivel de confianza visual (0–100 %) y el texto del tooltip según la clasificación.
+ * @param {string} clasificacion 'SPAM', 'HAM' o 'SOSPECHOSO'.
+ * @param {number} probHam       Probabilidad de ham en porcentaje.
+ * @param {number} probSpam      Probabilidad de spam en porcentaje.
+ * @return {Object} Objeto con clave (nombre del nivel), pct (porcentaje) y tooltip (descripción).
+ */
 function calcularNivel(clasificacion, probHam, probSpam) {
   let pct;
   if (clasificacion === 'SPAM')       pct = Math.round(100 - (probSpam || 0));
@@ -306,6 +371,9 @@ function calcularNivel(clasificacion, probHam, probSpam) {
   return           { clave: 'seguro',        pct, tooltip: 'Este correo fue identificado como completamente legítimo y confiable.' };
 }
 
+/**
+ * @brief Crea el elemento tooltip global y registra los listeners de mouse para mostrarlo sobre las barras de nivel.
+ */
 function iniciarTooltipNivel() {
   _tooltipEl = document.createElement('div');
   _tooltipEl.className = 'nivel-tooltip';
@@ -335,6 +403,9 @@ function iniciarTooltipNivel() {
   });
 }
 
+/**
+ * @brief Muestra el estado de bandeja vacía con un mensaje contextual según la categoría activa.
+ */
 function mostrarBandejaVacia() {
   const tc  = document.getElementById('tabla-contenido');
   const nom = categoriaActiva === 'archivados' ? 'archivados' : 'en la bandeja principal';
@@ -343,6 +414,11 @@ function mostrarBandejaVacia() {
   if (badge) badge.textContent = '0';
 }
 
+/**
+ * @brief Devuelve el HTML del badge de clasificación (SPAM / HAM / DUDA) para una clasificación dada.
+ * @param {string} clas Clasificación: 'SPAM', 'HAM' o 'SOSPECHOSO'.
+ * @return {Object} Objeto con propiedad badge (string HTML).
+ */
 function badgeInfo(clas) {
   if (clas === 'SPAM')       return { badge: '<span class="badge badge-spam"><span class="badge-dot"></span>SPAM</span>' };
   if (clas === 'HAM')        return { badge: '<span class="badge badge-ham"><span class="badge-dot"></span>HAM</span>' };
@@ -350,10 +426,20 @@ function badgeInfo(clas) {
   return { badge: '<span class="badge badge-ind">—</span>' };
 }
 
+/**
+ * @brief Escapa caracteres especiales HTML para evitar XSS al insertar texto en innerHTML.
+ * @param {*} s Valor a escapar.
+ * @return {string} Cadena con entidades HTML escapadas.
+ */
 function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+/**
+ * @brief Convierte la fecha del servidor (formato 'DD mes YYYY, HH:MM') al formato local del navegador.
+ * @param {string} fechaStr Fecha en formato del servidor.
+ * @return {string} Fecha formateada según el locale del navegador, o la cadena original si falla.
+ */
 function formatearFechaLocal(fechaStr) {
   if (!fechaStr) return '—';
   try {
@@ -378,6 +464,10 @@ function formatearFechaLocal(fechaStr) {
   }
 }
 
+/**
+ * @brief Genera la tabla HTML de correos e inyecta el resultado en el contenedor de la bandeja.
+ * @param {Array} correos Lista de objetos correo a mostrar.
+ */
 function renderTabla(correos) {
   const tc = document.getElementById('tabla-contenido');
   if (!correos.length) {
@@ -418,6 +508,9 @@ function renderTabla(correos) {
   </table>`;
 }
 
+/**
+ * @brief Envía el texto del área de clasificación al servidor y muestra el resultado en el panel.
+ */
 async function clasificarTexto() {
   const texto = document.getElementById('txt-input').value.trim();
   if (!texto) { mostrarToast('Escribe un mensaje primero.'); return; }
@@ -441,6 +534,10 @@ async function clasificarTexto() {
   }
 }
 
+/**
+ * @brief Rellena el panel de resultado con la clasificación, confianza y probabilidades devueltas por la API.
+ * @param {Object} d Respuesta JSON del endpoint /api/clasificar.
+ */
 function mostrarResultado(d) {
   const box    = document.getElementById('result-box');
   const iconos = { SPAM:'🚫', HAM:'✅', SOSPECHOSO:'⚠️', INDETERMINADO:'❓' };
@@ -459,12 +556,19 @@ function mostrarResultado(d) {
   box.classList.add('visible');
 }
 
+/**
+ * @brief Actualiza el tipo de feedback activo (spam o ham) y resalta el botón correspondiente.
+ * @param {string} tipo 'spam' o 'ham'.
+ */
 function selTipo(tipo) {
   tipoFeedback = tipo;
   document.getElementById('btn-spam-tipo').classList.toggle('sel', tipo === 'spam');
   document.getElementById('btn-ham-tipo').classList.toggle('sel',  tipo === 'ham');
 }
 
+/**
+ * @brief Envía las palabras clave del campo de feedback al servidor y recarga la lista de correcciones.
+ */
 async function enviarFeedback() {
   const campo   = document.getElementById('fb-palabra');
   const entrada = campo.value.trim();
@@ -487,6 +591,9 @@ async function enviarFeedback() {
   }
 }
 
+/**
+ * @brief Carga las correcciones desde el servidor y actualiza la UI y localStorage.
+ */
 async function cargarChips() {
   try {
     const r = await fetch('/api/correcciones');
@@ -501,6 +608,11 @@ async function cargarChips() {
   } catch {}
 }
 
+/**
+ * @brief Renderiza la lista de palabras de corrección de un tipo en su contenedor HTML.
+ * @param {string} tipo    'spam' o 'ham'.
+ * @param {Array}  palabras Lista de palabras a mostrar.
+ */
 function renderListaCorrecciones(tipo, palabras) {
   const lista  = document.getElementById('lista-' + tipo);
   const empty  = document.getElementById('empty-' + tipo);
@@ -515,6 +627,12 @@ function renderListaCorrecciones(tipo, palabras) {
   lista.innerHTML = palabras.map(p => crearItemHTML(p, tipo)).join('');
 }
 
+/**
+ * @brief Genera el HTML de un ítem de corrección con sus botones de editar y eliminar.
+ * @param {string} palabra Palabra de la corrección.
+ * @param {string} tipo    'spam' o 'ham'.
+ * @return {string} HTML del elemento de lista.
+ */
 function crearItemHTML(palabra, tipo) {
   return `<li class="correccion-item" id="item-${tipo}-${esc(palabra)}">
     <span class="correccion-palabra">${esc(palabra)}</span>
@@ -525,6 +643,11 @@ function crearItemHTML(palabra, tipo) {
   </li>`;
 }
 
+/**
+ * @brief Reemplaza el ítem de una corrección por un campo de edición inline.
+ * @param {string} palabra Palabra a editar.
+ * @param {string} tipo    'spam' o 'ham'.
+ */
 function iniciarEdicion(palabra, tipo) {
   const item = document.getElementById('item-' + tipo + '-' + palabra);
   if (!item) return;
@@ -538,11 +661,21 @@ function iniciarEdicion(palabra, tipo) {
   document.getElementById('input-edicion-' + tipo + '-' + palabra)?.focus();
 }
 
+/**
+ * @brief Descarta la edición en curso y restaura el ítem a su vista original.
+ * @param {string} palabra Palabra cuya edición se cancela.
+ * @param {string} tipo    'spam' o 'ham'.
+ */
 function cancelarEdicion(palabra, tipo) {
   const item = document.getElementById('item-' + tipo + '-' + palabra);
   if (item) item.outerHTML = crearItemHTML(palabra, tipo);
 }
 
+/**
+ * @brief Guarda el nuevo valor de una corrección editada y actualiza la lista en el servidor.
+ * @param {string} anterior Palabra original antes de la edición.
+ * @param {string} tipo     'spam' o 'ham'.
+ */
 async function guardarEdicion(anterior, tipo) {
   const input = document.getElementById('input-edicion-' + tipo + '-' + anterior);
   if (!input) return;
@@ -559,6 +692,11 @@ async function guardarEdicion(anterior, tipo) {
   } catch { mostrarToast('Error.'); cancelarEdicion(anterior, tipo); }
 }
 
+/**
+ * @brief Elimina una palabra de corrección del servidor tras confirmación del usuario.
+ * @param {string} palabra Palabra a eliminar.
+ * @param {string} tipo    'spam' o 'ham'.
+ */
 async function eliminarCorreccion(palabra, tipo) {
   if (!confirm(`¿Eliminar "${palabra}" de ${tipo.toUpperCase()}?`)) return;
   try {
@@ -572,6 +710,10 @@ async function eliminarCorreccion(palabra, tipo) {
   } catch { mostrarToast('Error.'); }
 }
 
+/**
+ * @brief Abre el modal de detalle de un correo, carga su contenido completo y activa el panel FPM.
+ * @param {string} id ID del correo en Gmail.
+ */
 async function abrirCorreo(id) {
   _correosLeidos.add(String(id));
   localStorage.setItem('ilico_leidos', JSON.stringify([..._correosLeidos]));
@@ -607,6 +749,7 @@ async function abrirCorreo(id) {
 
     const body = document.getElementById('modal-body');
     if (d.html_cuerpo && d.html_cuerpo.trim()) {
+      // Renderiza HTML del correo en un iframe sandboxed para aislar scripts externos
       body.innerHTML = '<div class="modal-cuerpo-html"><iframe id="email-frame" sandbox="allow-same-origin" srcdoc=""></iframe></div>';
       const frame    = document.getElementById('email-frame');
       frame.srcdoc   = d.html_cuerpo;
@@ -631,10 +774,17 @@ async function abrirCorreo(id) {
   }
 }
 
+/**
+ * @brief Cierra el modal si el usuario hace clic en el overlay (fuera del modal).
+ * @param {MouseEvent} e Evento de clic sobre el overlay.
+ */
 function cerrarModal(e) {
   if (e.target === document.getElementById('modal-overlay')) cerrarModalBtn();
 }
 
+/**
+ * @brief Cierra el modal del correo, limpia su contenido y cierra el panel FPM si estaba abierto.
+ */
 function cerrarModalBtn() {
   document.getElementById('modal-overlay').classList.remove('open');
   document.body.style.overflow = '';
@@ -642,10 +792,17 @@ function cerrarModalBtn() {
   cerrarFPM();
 }
 
+// Cerrar modal con tecla Escape
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') cerrarModalBtn();
 });
 
+/**
+ * @brief Abre el panel flotante de verificación de clasificación (FPM) para el correo abierto.
+ * @param {string} id              ID del correo en Gmail.
+ * @param {string} clasificacion   Clasificación actual: 'SPAM', 'HAM' o 'SOSPECHOSO'.
+ * @param {string} textoClasificar Texto del correo usado para clasificar.
+ */
 function abrirFPM(id, clasificacion, textoClasificar) {
   _fpmCorreoId        = id;
   _fpmTipo            = clasificacion === 'SPAM' ? 'spam' : 'ham';
@@ -664,11 +821,18 @@ function abrirFPM(id, clasificacion, textoClasificar) {
   document.getElementById('fpm').classList.add('open');
 }
 
+/**
+ * @brief Cierra el panel flotante de verificación (FPM) y limpia su estado.
+ */
 function cerrarFPM() {
   document.getElementById('fpm').classList.remove('open');
   _fpmCorreoId = null;
 }
 
+/**
+ * @brief Procesa la respuesta del usuario al FPM: confirma la clasificación o muestra el formulario de corrección.
+ * @param {boolean} correcto True si la clasificación era correcta; false si debe corregirse.
+ */
 function fpmRespuesta(correcto) {
   if (correcto) {
     document.getElementById('fpm-pregunta').style.display = 'none';
@@ -683,12 +847,19 @@ function fpmRespuesta(correcto) {
   }
 }
 
+/**
+ * @brief Selecciona el tipo de clasificación correcta en el formulario de corrección del FPM.
+ * @param {string} tipo 'spam' o 'ham'.
+ */
 function fpmSelTipo(tipo) {
   _fpmTipo = tipo;
   document.getElementById('fpm-tipo-spam').classList.toggle('sel', tipo === 'spam');
   document.getElementById('fpm-tipo-ham').classList.toggle('sel',  tipo === 'ham');
 }
 
+/**
+ * @brief Envía la corrección del usuario desde el FPM al servidor y muestra confirmación.
+ */
 async function fpmGuardar() {
   const campo   = document.getElementById('fpm-palabra');
   const entrada = campo.value.trim();
@@ -722,6 +893,10 @@ async function fpmGuardar() {
   }
 }
 
+/**
+ * @brief Muestra una notificación toast temporal en la esquina inferior derecha de la pantalla.
+ * @param {string} msg Mensaje a mostrar.
+ */
 function mostrarToast(msg) {
   const t = document.getElementById('toast');
   t.textContent = msg;

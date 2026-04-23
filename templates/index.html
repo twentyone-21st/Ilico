@@ -1,5 +1,7 @@
 <!DOCTYPE html>
 <html lang="es">
+
+<!-- HEAD: metadatos, fuentes y hoja de estilos -->
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -10,8 +12,10 @@
 </head>
 <body>
 
+<!-- APP SHELL: contenedor raíz que engloba sidebar y área de contenido -->
 <div class="app-shell">
 
+  <!-- SIDEBAR: navegación lateral con categorías de bandeja y herramientas -->
   <aside class="sidebar">
     <div class="logo">
       <div class="logo-mark">
@@ -42,9 +46,12 @@
     </nav>
 
   </aside>
+  <!-- /SIDEBAR -->
 
+  <!-- LAYOUT PRINCIPAL: columna flex que contiene topbar y contenido desplazable -->
   <div style="display:flex;flex-direction:column;min-height:100vh;margin-left:260px;width:calc(100% - 260px);">
 
+    <!-- TOPBAR: título de sección activa y badge del usuario autenticado -->
     <header class="topbar">
       <div class="topbar-title" id="topbar-title">Bandeja de entrada</div>
       <div class="topbar-right">
@@ -57,11 +64,14 @@
         {% endif %}
       </div>
     </header>
+    <!-- /TOPBAR -->
 
     <main class="main">
 
+      <!-- SECCIÓN: BANDEJA DE ENTRADA — lista de correos clasificados -->
       <section id="sec-bandeja" class="section visible">
 
+        <!-- BANNER: conexión Gmail (visible solo cuando el usuario no está autenticado) -->
         {% if not autenticado %}
         <div class="connect-banner">
           <div class="connect-icon">📬</div>
@@ -78,11 +88,14 @@
           </a>
         </div>
         {% endif %}
+        <!-- /BANNER -->
 
+        <!-- TABLA: contenedor principal de la lista de correos analizados -->
         <div class="table-wrap">
           <div class="table-header">
             <div style="display:flex;align-items:center;gap:10px;">
               <div class="table-title">Análisis de correos</div>
+              <!-- Indicador "En vivo" visible mientras el polling está activo -->
               <div id="refresh-indicator" style="display:none;align-items:center;gap:6px;font-size:11px;color:var(--text-2);">
                 <div style="width:7px;height:7px;border-radius:50%;background:var(--ham);box-shadow:0 0 6px var(--ham-glow);animation:pulse 2s infinite;contain:layout;"></div>
                 En vivo
@@ -95,8 +108,7 @@
             </div>
           </div>
 
-
-
+          <!-- Contenido dinámico: spinner, tabla o estado vacío inyectado por JS -->
           <div id="tabla-contenido">
             <div class="empty">
               <div class="empty-icon">📭</div>
@@ -104,9 +116,12 @@
             </div>
           </div>
         </div>
+        <!-- /TABLA -->
 
       </section>
+      <!-- /SECCIÓN BANDEJA -->
 
+      <!-- SECCIÓN: CLASIFICAR TEXTO — permite analizar cualquier mensaje manualmente -->
       <section id="sec-clasificar" class="section">
         <div class="classify-panel">
           <div class="panel-title">Clasificar texto</div>
@@ -116,6 +131,7 @@
             <div>
               <button type="button" class="btn btn-primary" id="btn-clasificar" onclick="clasificarTexto()">Analizar mensaje</button>
             </div>
+            <!-- Panel de resultado: se muestra tras recibir la respuesta de la API -->
             <div class="result-box" id="result-box">
               <div class="result-main">
                 <div class="result-icon" id="r-icon"></div>
@@ -138,12 +154,15 @@
           </div>
         </div>
       </section>
+      <!-- /SECCIÓN CLASIFICAR -->
 
+      <!-- SECCIÓN: ENSEÑAR AL SISTEMA — palabras clave para ajustar el clasificador -->
       <section id="sec-aprender" class="section">
         <div class="feedback-panel">
           <div class="panel-title">Enseñar al sistema</div>
           <div class="panel-sub">Agrega, edita o elimina palabras clave para afinar las clasificaciones en tiempo real.</div>
 
+          <!-- Formulario para añadir nuevas palabras de corrección -->
           <div class="feedback-form">
             <input type="text" id="fb-palabra" placeholder="Escribe una palabra clave..." onkeydown="if(event.key==='Enter')enviarFeedback()">
             <div class="tipo-select">
@@ -153,6 +172,7 @@
             <button class="btn btn-primary" onclick="enviarFeedback()">Agregar</button>
           </div>
 
+          <!-- Resumen de totales de palabras enseñadas -->
           <div class="feedback-resumen">
             <div class="feedback-resumen-item">
               <span class="feedback-resumen-label">Palabras SPAM enseñadas</span>
@@ -164,6 +184,7 @@
             </div>
           </div>
 
+          <!-- Listas editables de palabras SPAM y HAM -->
           <div class="correcciones-seccion">
             <div class="correcciones-grid">
               <div class="correcciones-grupo">
@@ -195,16 +216,20 @@
           </div>
         </div>
       </section>
+      <!-- /SECCIÓN ENSEÑAR -->
 
     </main>
   </div>
+  <!-- /LAYOUT PRINCIPAL -->
 
+  <!-- MODAL: detalle completo del correo seleccionado en la tabla -->
   <div class="modal-overlay" id="modal-overlay" onclick="cerrarModal(event)">
     <div class="modal" id="modal">
       <div class="modal-header">
         <div class="modal-asunto" id="modal-asunto">Cargando...</div>
         <button class="modal-close" onclick="cerrarModalBtn()">✕</button>
       </div>
+      <!-- Metadatos del correo: remitente y fecha -->
       <div class="modal-meta" id="modal-meta">
         <div class="modal-meta-item">
           <span class="modal-meta-label">De</span>
@@ -215,10 +240,12 @@
           <span class="modal-meta-value" id="modal-fecha">—</span>
         </div>
       </div>
+      <!-- Clasificación y razón del correo -->
       <div class="modal-clas-row" id="modal-clas-row">
         <span id="modal-badge"></span>
         <span class="modal-razon" id="modal-razon"></span>
       </div>
+      <!-- Cuerpo del correo: texto plano o HTML en iframe sandboxed -->
       <div class="modal-body" id="modal-body">
         <div class="modal-loading">
           <div class="spinner"></div>
@@ -230,9 +257,12 @@
       </div>
     </div>
   </div>
+  <!-- /MODAL -->
 
 </div>
+<!-- /APP SHELL -->
 
+<!-- PANEL FLOTANTE: verificación de clasificación (FPM) — aparece al abrir un correo -->
 <div class="feedback-panel-modal" id="fpm">
   <div class="fpm-header">🤖 Verificación de clasificación</div>
   <div class="fpm-body">
@@ -243,6 +273,7 @@
       <button class="fpm-btn correcto"   onclick="fpmRespuesta(true)">✅ Sí, correcto</button>
       <button class="fpm-btn incorrecto" onclick="fpmRespuesta(false)">❌ No, corregir</button>
     </div>
+    <!-- Formulario de corrección: visible solo si el usuario indica clasificación incorrecta -->
     <div class="fpm-correccion" id="fpm-correccion">
       <div class="fpm-label">¿Cuál era la clasificación correcta?</div>
       <div class="fpm-tipo-row">
@@ -257,9 +288,12 @@
     <div class="fpm-ok" id="fpm-ok">✅ ¡Gracias! El modelo ha aprendido de tu corrección.</div>
   </div>
 </div>
+<!-- /PANEL FLOTANTE -->
 
+<!-- TOAST: notificación temporal en esquina inferior derecha -->
 <div class="toast" id="toast"></div>
 
+<!-- SCRIPT: lógica de interfaz y comunicación con la API -->
 <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>

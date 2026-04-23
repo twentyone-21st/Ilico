@@ -1,3 +1,7 @@
+"""
+@file gmail_service.py
+@brief Capa de integración con la Gmail API. Gestiona OAuth2, descarga y parseo de correos.
+"""
 import os
 import base64
 import json
@@ -27,6 +31,7 @@ SCOPES = [
 TOKEN_PATH       = Path(__file__).parent / "token.json"
 CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
 
+# Consultas Gmail para cada categoría de bandeja
 QUERY_POR_CATEGORIA = {
     "principal":  "label:INBOX",
     "archivados": "-label:INBOX -label:DRAFT -label:SENT -label:TRASH -label:SPAM",
@@ -34,6 +39,10 @@ QUERY_POR_CATEGORIA = {
 
 
 def obtener_credenciales():
+    """
+    @brief Carga el token OAuth desde disco y lo renueva automáticamente si está vencido.
+    @return Objeto Credentials válido, o None si no hay sesión activa.
+    """
     if not GOOGLE_AVAILABLE:
         return None
     creds = None
@@ -51,6 +60,11 @@ def obtener_credenciales():
 
 
 def crear_flujo_oauth(redirect_uri: str):
+    """
+    @brief Crea el flujo de autenticación OAuth2, usando variable de entorno o archivo de credenciales.
+    @param redirect_uri URI de retorno registrada en Google Cloud Console.
+    @return Objeto Flow listo para iniciar la autorización.
+    """
     creds_json = os.environ.get("GOOGLE_CREDENTIALS_JSON")
     if creds_json:
         return Flow.from_client_config(
@@ -64,6 +78,12 @@ def crear_flujo_oauth(redirect_uri: str):
 
 
 def guardar_credenciales_desde_codigo(codigo: str, redirect_uri: str):
+    """
+    @brief Intercambia el código de autorización por tokens y los persiste en disco.
+    @param codigo       Código OAuth recibido en el callback de Google.
+    @param redirect_uri Misma URI usada al iniciar el flujo.
+    @return Objeto Credentials obtenido.
+    """
     flujo = crear_flujo_oauth(redirect_uri)
     flujo.fetch_token(code=codigo)
     _guardar_token(flujo.credentials)
@@ -71,15 +91,27 @@ def guardar_credenciales_desde_codigo(codigo: str, redirect_uri: str):
 
 
 def _guardar_token(creds):
+    """
+    @brief Serializa y escribe el token OAuth en token.json para reutilizarlo en reinicios.
+    @param creds Credenciales a persistir.
+    """
     with open(TOKEN_PATH, "w") as f:
         f.write(creds.to_json())
 
 
 def esta_autenticado() -> bool:
+    """
+    @brief Verifica si existe un token OAuth válido para la sesión actual.
+    @return True si el usuario está autenticado con Gmail.
+    """
     return obtener_credenciales() is not None
 
 
 def obtener_servicio():
+    """
+    @brief Construye el cliente autenticado de la Gmail API v1.
+    @return Recurso de la Gmail API listo para usarse.
+    """
     creds = obtener_credenciales()
     if not creds:
         raise PermissionError("Usuario no autenticado con Gmail.")
@@ -88,11 +120,19 @@ def obtener_servicio():
 
 def listar_correos(max_resultados: int = 500, etiqueta: str = "INBOX",
                    categoria: str = "principal") -> list:
+    """
+    @brief Obtiene y parsea correos de Gmail en paralelo, devueltos en orden cronológico inverso.
+    @param max_resultados Número máximo de correos a obtener.
+    @param etiqueta       Parámetro heredado (no usado directamente; se usa 'categoria').
+    @param categoria      'principal' o 'archivados'.
+    @return Lista de dicts de correo ordenada del más reciente al más antiguo.
+    """
     try:
         servicio = obtener_servicio()
         creds    = obtener_credenciales()
         query    = QUERY_POR_CATEGORIA.get(categoria, "label:INBOX")
 
+        # Paginación para obtener hasta max_resultados IDs de mensajes
         mensajes = []
         vistos   = set()
         page_token = None
@@ -127,6 +167,7 @@ def listar_correos(max_resultados: int = 500, etiqueta: str = "INBOX",
 
         correos = []
 
+        # Cada hilo usa sus propias credenciales para evitar problemas de concurrencia
         def _parsear_con_creds_propias(mensaje_id: str):
             svc = build("gmail", "v1", credentials=creds)
             return _parsear_correo(svc, mensaje_id)
@@ -144,6 +185,7 @@ def listar_correos(max_resultados: int = 500, etiqueta: str = "INBOX",
                 except Exception as e:
                     logger.debug(f"Error parseando {futuros[futuro]}: {e}")
 
+        # Ordenar del correo más reciente al más antiguo usando el timestamp numérico
         correos.sort(key=lambda c: c.get("fecha_ts", 0), reverse=True)
         return correos
 
@@ -156,6 +198,12 @@ def listar_correos(max_resultados: int = 500, etiqueta: str = "INBOX",
 
 
 def _parsear_correo(servicio, mensaje_id: str):
+    """
+    @brief Extrae asunto, remitente, fecha, cuerpo y etiquetas de un mensaje de Gmail.
+    @param servicio    Cliente autenticado de la Gmail API.
+    @param mensaje_id  ID del mensaje a parsear.
+    @return Dict con los campos del correo, o None si ocurre un error.
+    """
     try:
         msg     = servicio.users().messages().get(userId="me", id=mensaje_id, format="full").execute()
         headers = {h["name"]: h["value"] for h in msg["payload"].get("headers", [])}
@@ -184,6 +232,11 @@ def _parsear_correo(servicio, mensaje_id: str):
 
 
 def _extraer_cuerpo(payload: dict) -> str:
+    """
+    @brief Extrae el texto plano del payload MIME de forma recursiva, preferiendo text/plain.
+    @param payload Dict de payload del mensaje de Gmail.
+    @return Texto plano del correo, o cadena vacía si no hay ninguno.
+    """
     cuerpo = ""
     if "parts" in payload:
         for part in payload["parts"]:
@@ -204,6 +257,11 @@ def _extraer_cuerpo(payload: dict) -> str:
 
 
 def _extraer_html(payload: dict) -> str:
+    """
+    @brief Extrae el contenido HTML del payload MIME de forma recursiva para mostrarlo en el modal.
+    @param payload Dict de payload del mensaje de Gmail.
+    @return HTML del correo, o cadena vacía si no existe.
+    """
     html = ""
     if "parts" in payload:
         for part in payload["parts"]:
@@ -225,6 +283,11 @@ def _extraer_html(payload: dict) -> str:
 
 
 def _fecha_timestamp(fecha_str: str) -> float:
+    """
+    @brief Convierte una fecha de cabecera RFC-2822 a Unix timestamp para ordenar correos.
+    @param fecha_str Cadena de fecha del header 'Date' del correo.
+    @return Timestamp numérico, o 0.0 si la fecha no es parseable.
+    """
     try:
         from email.utils import parsedate_to_datetime
         return parsedate_to_datetime(fecha_str).timestamp()
@@ -233,6 +296,11 @@ def _fecha_timestamp(fecha_str: str) -> float:
 
 
 def _formatear_fecha(fecha_str: str) -> str:
+    """
+    @brief Convierte una fecha RFC-2822 al formato de visualización local: '22 abr 2026, 03:28'.
+    @param fecha_str Cadena de fecha del header 'Date'.
+    @return Fecha formateada en español, o la cadena original si falla el parseo.
+    """
     try:
         from email.utils import parsedate_to_datetime
         dt = parsedate_to_datetime(fecha_str)
@@ -243,6 +311,11 @@ def _formatear_fecha(fecha_str: str) -> str:
 
 
 def obtener_correo_por_id(mensaje_id: str):
+    """
+    @brief Obtiene un correo completo de Gmail dado su ID, incluyendo cuerpo HTML y texto.
+    @param mensaje_id ID del mensaje en Gmail.
+    @return Dict con los campos del correo, o None si no se encuentra.
+    """
     try:
         servicio = obtener_servicio()
         return _parsear_correo(servicio, mensaje_id)
@@ -252,6 +325,10 @@ def obtener_correo_por_id(mensaje_id: str):
 
 
 def obtener_perfil_usuario() -> dict:
+    """
+    @brief Obtiene el email y el total de mensajes del perfil Gmail del usuario autenticado.
+    @return Dict con 'email' y 'total_correos'.
+    """
     try:
         servicio = obtener_servicio()
         perfil   = servicio.users().getProfile(userId="me").execute()

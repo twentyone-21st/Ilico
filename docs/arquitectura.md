@@ -51,7 +51,19 @@ GET /api/correos
 
 ## classifier.py — Motor de clasificación
 
-Implementa tres capas de clasificación en orden de prioridad:
+Implementa cuatro capas de clasificación en orden de prioridad:
+
+### Capa 0: Correcciones del usuario (prioridad absoluta)
+Antes de cualquier otra lógica, comprueba si el texto contiene palabras que el usuario ha enseñado al sistema. Si hay más palabras HAM que SPAM, devuelve HAM inmediatamente. Si hay más SPAM que HAM, devuelve SPAM. Esto garantiza que el feedback del usuario nunca sea ignorado, incluso frente a correos de bancos o patrones de estafa.
+
+```
+hits_ham  = palabras HAM del usuario presentes en el correo
+hits_spam = palabras SPAM del usuario presentes en el correo
+
+hits_ham >= hits_spam > 0  →  HAM  (confianza: 80–98 %)
+hits_spam > hits_ham       →  SPAM (confianza: 80–98 %)
+ninguna coincidencia       →  continúa a Capa 1
+```
 
 ### Capa 1: Detección de estafas
 Comprueba el texto contra patrones léxicos de alto riesgo (solicitud de datos bancarios + amenaza). Si coincide, devuelve SPAM con 96 % de confianza sin consultar el modelo.
@@ -72,6 +84,12 @@ Si el dominio es confiable, analiza la intención del contenido:
 
 ### Capa 3: Modelo NLP
 Usa el pipeline TF-IDF + Naive Bayes entrenado. Las probabilidades se ajustan con las palabras que el usuario ha enseñado al sistema (+15 % por cada palabra coincidente, máximo 45 %).
+
+---
+
+## app.py — Comportamiento tras nuevo deploy
+
+Al arrancar el servidor, `app.py` comprueba si existe un `token.json` cuya fecha de creación sea anterior al inicio del proceso actual. Si es así, lo elimina automáticamente. Esto garantiza que tras cada nuevo deploy en Railway el usuario sea redirigido a iniciar sesión, evitando estados inconsistentes donde la app aparece autenticada pero con la memoria vacía.
 
 ---
 

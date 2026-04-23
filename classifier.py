@@ -460,23 +460,75 @@ def _cargar_feedback_correos_desde_json():
 
 def _cargar_desde_huggingface():
     """
-    @brief Descarga el dataset multilingüe SMS Spam de Hugging Face y lo combina con el dataset interno.
-    @return Tupla (textos, etiquetas) con los datos del dataset ampliado.
+    @brief Descarga múltiples datasets de HuggingFace (spam multilingüe, phishing, fraude) y los combina.
+    @return Tupla (textos, etiquetas) con todos los datos ampliados.
     """
-    logger.info("  Descargando dataset desde Hugging Face...")
-    dataset = load_dataset("ashu0311/SMS_Spam_Multilingual_Collection_Dataset")
-    datos   = dataset[list(dataset.keys())[0]]
-
     textos, etiquetas = [], []
-    for r in datos:
-        txt = str(r.get("text_es") or "").strip()
-        lbl = str(r.get("labels")  or "").strip().lower()
-        if txt and lbl in ["ham", "spam"]:
+
+    # Dataset 1: SMS spam multilingüe (incluye español)
+    try:
+        logger.info("  [HF] Cargando SMS spam multilingüe...")
+        ds = load_dataset("ashu0311/SMS_Spam_Multilingual_Collection_Dataset")
+        for r in ds[list(ds.keys())[0]]:
+            txt = str(r.get("text_es") or "").strip()
+            lbl = str(r.get("labels")  or "").strip().lower()
+            if txt and lbl in ["ham", "spam"]:
+                textos.append(preprocesar(txt))
+                etiquetas.append(lbl)
+        logger.info(f"  [HF] SMS multilingüe: {len(textos)} ejemplos")
+    except Exception as e:
+        logger.warning(f"  [HF] SMS multilingüe no disponible: {e}")
+
+    # Dataset 2: Phishing emails (en inglés, útil para patrones universales de fraude)
+    n_antes = len(textos)
+    try:
+        logger.info("  [HF] Cargando dataset de phishing...")
+        ds2 = load_dataset("cybersectony/phishing-email-detection-v2.4.1")
+        split = list(ds2.keys())[0]
+        for r in ds2[split]:
+            txt = str(r.get("text") or r.get("email_text") or "").strip()[:600]
+            lbl_raw = str(r.get("label") or r.get("label_num") or "").strip()
+            if not txt:
+                continue
+            if lbl_raw in ("1", "phishing", "spam"):
+                lbl = "spam"
+            elif lbl_raw in ("0", "legitimate", "ham"):
+                lbl = "ham"
+            else:
+                continue
             textos.append(preprocesar(txt))
             etiquetas.append(lbl)
+        logger.info(f"  [HF] Phishing dataset: {len(textos) - n_antes} ejemplos")
+    except Exception as e:
+        logger.warning(f"  [HF] Phishing dataset no disponible: {e}")
+
+    # Dataset 3: Email spam general
+    n_antes = len(textos)
+    try:
+        logger.info("  [HF] Cargando dataset email spam general...")
+        ds3 = load_dataset("mshenoda/email-spam")
+        split = list(ds3.keys())[0]
+        for r in ds3[split]:
+            txt = str(r.get("text") or "").strip()[:600]
+            lbl_raw = str(r.get("label") or "").strip().lower()
+            if not txt:
+                continue
+            if lbl_raw in ("1", "spam"):
+                lbl = "spam"
+            elif lbl_raw in ("0", "ham", "not spam"):
+                lbl = "ham"
+            else:
+                continue
+            textos.append(preprocesar(txt))
+            etiquetas.append(lbl)
+        logger.info(f"  [HF] Email spam general: {len(textos) - n_antes} ejemplos")
+    except Exception as e:
+        logger.warning(f"  [HF] Email spam general no disponible: {e}")
 
     t2, e2 = _dataset_interno()
-    return textos + t2, etiquetas + e2
+    textos.extend(t2)
+    etiquetas.extend(e2)
+    return textos, etiquetas
 
 
 def entrenar_modelo(forzar: bool = False) -> tuple:
@@ -560,9 +612,12 @@ def entrenar_modelo(forzar: bool = False) -> tuple:
 
 def _dataset_interno():
     """
-    @brief Devuelve el dataset base hardcodeado con ejemplos de ham bancario/seguridad y spam típico dominicano.
+    @brief Dataset base en español con ejemplos de 10 categorías HAM y 10 categorías SPAM.
     @return Tupla (textos_preprocesados, etiquetas) lista para entrenamiento.
     """
+
+    # ── HAM ──────────────────────────────────────────────────────────────────
+
     ham_bancario = [
         "Su tarjeta terminada en 4521 fue utilizada por RD$ 2,350.00 en Supermercados Nacional el 12/04/2026",
         "Transferencia recibida de Juan Perez por RD$ 5,000.00 a su cuenta corriente 001-234567-8",
@@ -581,9 +636,12 @@ def _dataset_interno():
         "Banreservas: Pago de servicios CAASD por RD$ 890.00 procesado. Referencia: 2024039821",
         "Scotiabank: Depósito de nómina recibido RD$ 35,000.00 empresa Grupo Leon Jimenes",
         "APAP: Su certificado financiero vence en 30 días. Monto: RD$ 200,000.00",
-    ] * 8
+        "Visacard: Su pago de RD$ 4,500.00 fue recibido. Gracias por mantenerse al día",
+        "Promerica: Apertura de cuenta de ahorros confirmada. Número de cuenta: 0045-89231",
+        "Vimenca: Cambio de divisa procesado. Vendiste USD$ 200.00 a RD$ 11,800.00",
+    ] * 7
 
-    ham_seguridad = [
+    ham_seguridad_digital = [
         "Tu código de verificación de Google es 591847. No compartas este código",
         "Alguien intentó acceder a tu cuenta de Gmail desde Chrome en Windows. Si fuiste tú ignora este mensaje",
         "Tu suscripción de Netflix se renovó exitosamente por $15.99 USD el 12 de abril",
@@ -597,7 +655,11 @@ def _dataset_interno():
         "PayPal: Enviaste $50.00 USD a merchant@tienda.com",
         "Claro RD: Tu recarga de RD$ 200.00 fue aplicada exitosamente. Saldo: RD$ 245.00",
         "Altice: Tu factura del mes de abril por RD$ 2,100.00 está disponible",
-    ] * 8
+        "WhatsApp: Tu código de verificación es 724-519. No lo compartas con nadie",
+        "Dropbox: Alguien accedió a tus archivos desde un dispositivo nuevo en República Dominicana",
+        "GitHub: Nueva clave SSH añadida a tu cuenta. Si no fuiste tú revoca el acceso ahora",
+        "Zoom: Tu reunión del lunes a las 10am ha sido confirmada. ID: 842-901-337",
+    ] * 7
 
     ham_personal = [
         "Hola, te confirmo la reunión del viernes a las 3pm en la oficina central",
@@ -607,9 +669,123 @@ def _dataset_interno():
         "Convocatoria: Asamblea ordinaria de accionistas el próximo 20 de abril",
         "Su cita médica está confirmada para el martes 16 de abril a las 9:00am",
         "Estimado cliente, su vehículo está listo para ser retirado del taller",
+        "Hola primo, te mando los archivos que me pediste para la presentación del lunes",
+        "Estimado, se le recuerda que el pago del alquiler vence el día 5 de cada mes",
+        "Buenas tardes, ¿podemos reagendar la llamada para el miércoles por la tarde?",
+        "Te escribo para informarte que cambié mi número de teléfono al 849-312-5678",
+        "Feliz cumpleaños, que tengas un excelente día rodeado de tus seres queridos",
     ] * 5
 
-    spam_phishing = [
+    ham_redes_sociales = [
+        "Facebook: Carlos Méndez te envió una solicitud de amistad",
+        "Instagram: Tu publicación recibió 47 me gusta en la última hora",
+        "TikTok: Tu video alcanzó 1,000 reproducciones. Sigue así",
+        "LinkedIn: Tienes 3 nuevas solicitudes de conexión de profesionales de tu sector",
+        "Twitter: @usuario_rd mencionó tu cuenta en un tweet",
+        "YouTube: Un nuevo comentario en tu video: gracias por el contenido, muy útil",
+        "Facebook: Tienes un recuerdo de hace 3 años. Míralo y compártelo si quieres",
+        "Instagram: @moda_rd comenzó a seguirte",
+        "LinkedIn: Tu publicación sobre desarrollo web obtuvo 120 reacciones",
+        "TikTok: Tienes 5 nuevos seguidores esta semana",
+        "Facebook Groups: Hay 12 publicaciones nuevas en el grupo Desarrolladores RD",
+        "Pinterest: 8 personas guardaron tu pin de recetas dominicanas esta semana",
+        "Reddit: Tu comentario fue votado positivamente 34 veces en r/programming",
+        "Twitch: El streamer que sigues está en vivo ahora mismo",
+        "Discord: Tienes 4 mensajes sin leer en el servidor de tu comunidad",
+    ] * 5
+
+    ham_trabajo = [
+        "RR.HH: Tu solicitud de vacaciones del 20 al 27 de abril fue aprobada",
+        "Recursos Humanos: El depósito de quincena se realizará el viernes 15 de abril",
+        "Tu evaluación de desempeño trimestral está disponible en el portal de empleados",
+        "Convocatoria a capacitación obligatoria: Nuevas normas de cumplimiento el jueves 18 a las 9am",
+        "Gerencia: La reunión de equipo del lunes se pospone al martes a las 11am",
+        "IT Soporte: Tu nueva laptop corporativa está lista para retiro en el piso 3",
+        "Nomina: Se procesó tu bono de productividad correspondiente al primer trimestre",
+        "RR.HH: Tu contrato de trabajo ha sido renovado por un año adicional",
+        "Oferta laboral confirmada: Analista de Datos, inicio el 2 de mayo, salario RD$ 75,000",
+        "Tu solicitud de trabajo remoto los viernes fue aprobada a partir de la próxima semana",
+        "Compañía: El seguro médico colectivo fue renovado, cubre dependientes directos",
+        "RR.HH: Tus días de vacaciones acumulados son 15. Solicítalos antes del 31 de diciembre",
+        "Agenda corporativa: Cena de fin de año el sábado 14 de diciembre en el Hotel Embajador",
+        "Tu reporte de gastos del mes de marzo fue aprobado y reembolsado",
+        "Felicitaciones: Fuiste seleccionado como empleado del mes de abril",
+    ] * 5
+
+    ham_ecommerce = [
+        "MercadoLibre: Tu paquete fue entregado hoy a las 2:14pm. Califica tu experiencia",
+        "Amazon: Tu pedido de auriculares inalámbricos fue enviado. Número de rastreo: 1Z999AA",
+        "AliExpress: Tu pedido llegará entre el 18 y 25 de abril según el transportista",
+        "Zara Online: Tu devolución de RD$ 3,200.00 fue procesada. Verás el reembolso en 5 días",
+        "MercadoLibre: Alguien hizo una oferta por el artículo que estás vendiendo",
+        "Amazon Prime: Tu período de prueba gratuito vence en 3 días",
+        "Carrefour: Tu pedido de supermercado en línea fue confirmado para entrega mañana",
+        "Claro Tienda: Tu nuevo iPhone 15 está listo para retirar en la tienda de Sambil",
+        "Netflix: Se añadió un nuevo dispositivo a tu cuenta. Si no fuiste tú, cambia tu clave",
+        "Booking.com: Tu reserva en Hotel Barceló fue confirmada para el 15 de mayo",
+        "Airbnb: Tu anfitrión confirmó tu reserva en Cabarete del 20 al 23 de junio",
+        "DiDi: Califica tu viaje reciente y ayuda a mejorar el servicio",
+    ] * 5
+
+    ham_educacion = [
+        "ITLA: Tu matrícula para el cuatrimestre mayo-agosto fue procesada exitosamente",
+        "UASD: Tienes calificaciones pendientes de revisar en el portal estudiantil",
+        "PUCMM: Tu beca fue renovada para el período académico 2026-2027",
+        "INTEC: La defensa de tu tesis fue programada para el 28 de mayo a las 10am",
+        "Ministerio de Educación: Los resultados de las pruebas nacionales están disponibles",
+        "O&M: El horario de clases del próximo cuatrimestre ya está publicado",
+        "Biblioteca UASD: El libro que solicitaste está disponible para retiro",
+        "Coursera: Completaste el 75% del curso de Python. Sigue así para obtener tu certificado",
+        "ITLA: El taller de inteligencia artificial es el sábado 19 a las 9am, asistencia obligatoria",
+        "Udemy: Tu certificado de Desarrollo Web está listo para descargar",
+        "edX: El curso de ciencia de datos comienza el lunes. Accede al material de introducción",
+        "Google Digital: Felicitaciones, obtuviste la certificación Google Analytics",
+    ] * 4
+
+    ham_salud = [
+        "Centro Médico UCE: Su cita con el Dr. Ramírez es el martes 16 a las 10:30am",
+        "Laboratorio Referencia: Sus resultados de exámenes están listos para ser retirados",
+        "ARS Humano: Su reclamación de reembolso por RD$ 8,400.00 fue aprobada",
+        "Farmacia Carol: Su medicamento Metformina 500mg está disponible para retiro",
+        "Dr. Peña Consultorio: Recordatorio de cita de seguimiento mañana a las 3pm",
+        "ARS Universal: Su plan de salud fue renovado. Nueva tarjeta disponible en sucursales",
+        "Hospital General Plaza: Sus resultados de imagen (rayos X) están disponibles en línea",
+        "Clínica Abreu: Le recordamos su vacuna de refuerzo contra el COVID programada para el viernes",
+        "ARS Reservas: La cirugía del 22 de abril fue preautorizada. Lleve este número: PRE-44821",
+        "Nutricionista Dra. López: Su plan alimenticio actualizado fue enviado a su correo",
+    ] * 5
+
+    ham_gobierno = [
+        "DGII: Su declaración jurada de impuestos del 2025 fue recibida correctamente",
+        "TSS: Su cotización de seguridad social del mes de marzo fue procesada",
+        "JCE: Su cédula de identidad está lista para ser retirada en la oficina de su demarcación",
+        "Dirección General de Pasaportes: Su pasaporte está listo. Pase a retirarlo con su recibo",
+        "DIGESETT: Infracciones de tránsito registradas a su nombre: 0. Récord limpio",
+        "Ministerio de Trabajo: Su solicitud de certificado de trabajo fue aprobada",
+        "INDOTEL: Su queja contra el proveedor de internet fue recibida. Referencia: QJ-20241",
+        "Pro Consumidor: Su denuncia fue tramitada. Le notificaremos el resultado en 15 días",
+        "Superintendencia de Bancos: Aviso de nueva regulación para tarjetas de crédito vigente desde mayo",
+        "Ministerio de Salud: Campaña de vacunación gratuita disponible en todos los centros de salud",
+        "SIUBEN: Su hogar fue actualizado en el registro de beneficiarios sociales",
+        "Ayuntamiento SDN: Su solicitud de permiso de construcción fue aprobada. Ref: PC-2026-0392",
+    ] * 4
+
+    ham_noticias = [
+        "El Listín Diario: Resumen de las noticias más importantes del día en República Dominicana",
+        "Diario Libre: Economía dominicana creció 5.2% en el primer trimestre del año",
+        "ESPN Deportes: El Licey venció al Escogido 4-2 en el juego de apertura de la temporada",
+        "Bloomberg: Los mercados bursátiles cerraron al alza impulsados por datos de empleo",
+        "TechCrunch: Apple anunció nuevos modelos de iPhone para septiembre con mejoras en IA",
+        "National Geographic: Descubren nueva especie de rana en la cordillera central dominicana",
+        "CNN en Español: Cumbre de líderes latinoamericanos aborda migración y cambio climático",
+        "Forbes: Las 10 empresas más innovadoras de Latinoamérica en 2026",
+        "Acento.com.do: El Banco Central mantiene tasa de interés estable para el segundo trimestre",
+        "El País: Avances en inteligencia artificial transforman el mercado laboral en Latinoamérica",
+    ] * 4
+
+    # ── SPAM ─────────────────────────────────────────────────────────────────
+
+    spam_phishing_bancario = [
         "URGENTE: Su cuenta bancaria será suspendida. Verifique ahora haciendo clic aquí inmediatamente",
         "Su tarjeta de crédito ha sido bloqueada por actividad sospechosa llame ya 1-800-FRAUDE",
         "Ganó RD$ 500,000 en el sorteo del Banco Central. Para reclamar envíe sus datos personales",
@@ -617,27 +793,166 @@ def _dataset_interno():
         "El banco le informa que necesitamos verificar su cuenta urgente ingrese su clave",
         "Felicidades su préstamo fue pre-aprobado sin requisitos ni buró de crédito llame hoy",
         "ALERTA: Movimiento sospechoso en su cuenta. Confirme sus datos en este enlace urgente",
-        "Su cuenta Paypal fue limitada verifique su identidad haciendo clic en el siguiente enlace",
+        "Su cuenta PayPal fue limitada verifique su identidad haciendo clic en el siguiente enlace",
         "Estimado cliente su cuenta será desactivada si no actualiza la información de inmediato",
-    ] * 10
+        "Banco Popular le informa que su cuenta está en riesgo ingrese ahora sus datos para protegerla",
+        "Qik: Recibiste una transferencia de RD$ 25,000 haz clic para aceptarla antes de que expire",
+        "BHD León urgente: detectamos fraude en su tarjeta confirme número completo y cvv aquí",
+    ] * 9
 
     spam_general = [
         "Gana dinero fácil desde casa sin inversión trabajando solo 2 horas diarias garantizado",
         "FELICIDADES fue seleccionado ganador de un iPhone 15 haga clic para reclamar su premio gratis",
-        "Inversion en criptomonedas con rendimiento garantizado del 300% en 30 dias registrese ya",
+        "Inversión en criptomonedas con rendimiento garantizado del 300% en 30 días regístrese ya",
         "Oferta exclusiva solo hoy 90% de descuento en todos los productos compra ahora antes que se agoten",
-        "Conoce personas solteras en tu area gratis registrate sin costo y empieza a chatear ahora",
-        "Medicamentos sin receta Viagra Cialis envio discreto a domicilio precio especial descuento",
-        "Su computadora tiene virus llame a soporte tecnico ahora mismo numero gratuito urgente",
-        "Loteria nacional ganador verificar premio llamar urgente numero ganador seleccionado",
+        "Conoce personas solteras en tu área gratis regístrate sin costo y empieza a chatear ahora",
+        "Medicamentos sin receta envío discreto a domicilio precio especial descuento exclusivo",
+        "Su computadora tiene virus llame a soporte técnico ahora mismo número gratuito urgente",
+        "Lotería nacional ganador verificar premio llamar urgente número ganador seleccionado",
         "Oportunidad de negocio multinivel gane comisiones ilimitadas reclute amigos ya empiece",
         "Promo especial casino online 100 giros gratis deposita y duplica tu dinero hoy mismo",
-        "Baje de peso en 7 dias sin dieta sin ejercicio pastilla milagrosa natural garantizado",
-        "Trabajo desde casa empacando productos gana RD$ 15000 semanales llame inscribase hoy",
-    ] * 10
+        "Baje de peso en 7 días sin dieta sin ejercicio pastilla milagrosa natural garantizado",
+        "Trabajo desde casa empacando productos gana RD$ 15,000 semanales llame inscríbase hoy",
+        "Eres el visitante número un millón de esta página haz clic para reclamar tu recompensa",
+        "Accede a miles de películas y series gratis sin pagar nunca descarga la app ahora mismo",
+    ] * 8
 
-    todos_ham  = ham_bancario + ham_seguridad + ham_personal
-    todos_spam = spam_phishing + spam_general
+    spam_extorsion = [
+        "Tengo acceso a tu cámara y grabé imágenes comprometedoras tuyas. Paga o las publico",
+        "Hackeé tu dispositivo hace semanas y tengo todo tu historial de navegación privado págame",
+        "Sé dónde vives y lo que haces cada día. Deposita RD$ 50,000 o hablaré con tu familia",
+        "Tus contraseñas han sido comprometidas tengo acceso a tus cuentas págame en Bitcoin ahora",
+        "Tengo fotos tuyas en situaciones comprometedoras. Transfiere dinero o las envío a tus contactos",
+        "He infectado tu teléfono con spyware y grabé todo lo que haces. Paga para que lo elimine",
+        "Tu información personal está en mi poder. Si no pagas la publicaré en la dark web",
+        "Conozco tu dirección exacta y la de tu familia. Paga o las consecuencias serán graves",
+        "Grabé tu pantalla durante meses tengo evidencia de todo lo que hiciste págame ahora mismo",
+        "Si no transfieres el monto indicado publicaré tus mensajes privados y fotos comprometedoras",
+        "Tengo acceso a tu correo desde hace meses sé todos tus secretos deposita para que lo cierre",
+        "Compré tus datos en la dark web y tengo acceso total a tu vida digital paga para borrarlo",
+        "Tu webcam fue hackeada y tengo grabaciones íntimas pages o las distribuyo a tus contactos",
+        "Soy hacker tengo tus contraseñas de todas tus redes sociales y cuentas banco págame ya",
+        "Enviaré este archivo a todos tus contactos si no depositas RD$ 30,000 en las próximas horas",
+    ] * 8
+
+    spam_hackers = [
+        "Tu cuenta de Gmail fue comprometida haz clic aquí para recuperar el acceso de inmediato",
+        "Detectamos actividad inusual descarga esta herramienta para proteger tu dispositivo ahora",
+        "Tu contraseña fue filtrada en una brecha de seguridad actualízala ahora en este enlace",
+        "Virus detectado en tu teléfono descarga este antivirus gratuito para eliminarlo ya",
+        "Tu IP fue registrada accediendo a contenido ilegal. Paga la multa para evitar consecuencias",
+        "Tu cuenta de Instagram fue hackeada ingresa aquí para recuperarla antes de que la pierdan",
+        "Alerta de seguridad crítica: tu dispositivo está infectado con ransomware llama ahora",
+        "Tus datos de inicio de sesión fueron robados en una filtración masiva actúa inmediatamente",
+        "Hemos detectado que alguien más usa tu cuenta descarga la actualización de seguridad urgente",
+        "Tu número de cédula está siendo usado para fraudes verifica tu identidad en este portal",
+        "Sistema comprometido tu teléfono envía datos a servidores externos descarga el parche ya",
+        "Fotos y documentos de tu dispositivo fueron accedidos remotamente paga para recuperar acceso",
+        "Tu router fue hackeado todos tus datos están en riesgo llama al soporte técnico urgente",
+        "Detectamos inicio de sesión desde Rusia en tu cuenta de WhatsApp verifica aquí",
+        "Malware instalado silenciosamente en tu equipo la semana pasada paga para su eliminación",
+    ] * 8
+
+    spam_fraude_laboral = [
+        "Oferta de trabajo desde casa gana USD$ 500 diarios sin experiencia ni título universitario",
+        "Empresa internacional busca representantes en RD comisiones del 40% sin horario fijo",
+        "Trabajo de modelo publicitario para redes sociales gana RD$ 80,000 al mes sin experiencia",
+        "Contratamos encuestadores en línea gana RD$ 2,500 por encuesta completada desde tu casa",
+        "Empleo urgente en crucero de lujo sin experiencia salario USD$ 3,000 mensuales aplica ya",
+        "Digitadores de datos para empresa en EE.UU. gana USD$ 25 por hora desde República Dominicana",
+        "Asistente virtual para celebridad gana RD$ 120,000 al mes trabajo 100% remoto aplica hoy",
+        "Reclutamos distribuidores de productos naturales gana sin límite desde tu teléfono celular",
+        "Oferta real: empresa canadiense paga USD$ 800 semanales por revisar correos electrónicos",
+        "Trabajo de mystery shopper compra en tiendas y te reembolsamos más una comisión generosa",
+        "Influencer pagado busca personas para reseñar productos en redes sociales sin seguidores",
+        "Gana dinero tomando fotos con tu celular empresa paga USD$ 50 por cada foto aprobada",
+    ] * 7
+
+    spam_fraude_romantico = [
+        "Hola soy militar de EE.UU. en misión en Africa busco una persona sincera con quien compartir",
+        "Soy viuda de un empresario con una gran herencia necesito ayuda para transferir los fondos",
+        "Conocí tu perfil y me enamoré necesito que me ayudes a salir del país con mi fortuna",
+        "Soy doctora en misión humanitaria enamorada de ti necesito dinero para el pasaje de regreso",
+        "Tengo USD$ 4 millones bloqueados en el banco necesito un socio de confianza para liberarlos",
+        "Me robaron la cartera en España y necesito que me prestes dinero para el vuelo de regreso",
+        "Somos almas gemelas nunca sentí esto por nadie necesito solo RD$ 15,000 para visitarte",
+        "Soy ingeniero trabajando en plataforma petrolera offshore busco amor verdadero envíame dinero",
+        "Mi hija está en el hospital necesito que me prestes dinero urgente te devuelvo con intereses",
+        "Ganamos juntos la lotería internacional para cobrar necesitas depositar los impuestos primero",
+        "Quiero casarme contigo pero necesito dinero para los papeles de migración ayúdame por favor",
+        "Tengo sentimientos profundos por ti solo necesito un pequeño préstamo para la emergencia médica",
+    ] * 7
+
+    spam_fraude_inversion = [
+        "Invierte en Bitcoin y duplica tu dinero en 48 horas garantizado por expertos financieros",
+        "Robot de trading automático genera USD$ 500 diarios sin que hagas nada regístrate gratis",
+        "Sistema de apuestas deportivas infalible ganamos el 95% de las predicciones únete ahora",
+        "Proyecto inmobiliario en metaverso inversión mínima de USD$ 100 gana USD$ 5,000 al mes",
+        "Club de inversión exclusivo solo 100 miembros rendimiento garantizado del 50% mensual",
+        "Copy trading copia las operaciones de traders millonarios gana sin saber nada del mercado",
+        "NFT que se revaloriza 10x en 30 días oportunidad única entra antes de que cierre el cupo",
+        "Forex señales VIP 98% de efectividad suscripción de prueba gratis por 7 días únete hoy",
+        "Pirámide de ahorro solidario todos ganan únete con RD$ 5,000 y recibe RD$ 50,000 en un mes",
+        "Criptomoneda nueva antes del lanzamiento público invierte ahora y multiplica tu capital",
+        "Plan de ahorro multinivel cada persona que refieras te genera ingresos pasivos de por vida",
+        "Empresa de inversión en oro con sede en Suiza rendimiento mensual del 8% comprobado únete",
+    ] * 7
+
+    spam_redes_falsas = [
+        "Compra 10,000 seguidores reales en Instagram solo USD$ 15 entrega en 24 horas garantizado",
+        "5,000 likes en tu publicación de Facebook por solo RD$ 500 pago por transferencia",
+        "Aumenta tus visitas en TikTok con nuestro bot 100,000 views por solo USD$ 25",
+        "Hackeamos cualquier cuenta de Instagram o Facebook pago contra entrega resultados reales",
+        "Recuperamos cuentas hackeadas de WhatsApp o redes sociales pago al confirmar resultado",
+        "Vendo cuentas de Instagram verificadas con miles de seguidores precios desde USD$ 50",
+        "Servicio de reseñas positivas para tu negocio en Google Maps 50 reseñas por RD$ 3,000",
+        "Monetiza tu canal de YouTube comprando suscriptores reales cumple los requisitos ya",
+        "Aumenta tu engagement en redes sociales con comentarios reales de personas reales hoy",
+        "Falsifica seguidores para parecer influencer y cobrar a marcas sin invertir tiempo",
+    ] * 6
+
+    spam_gobierno_falso = [
+        "DGII: Tiene una deuda pendiente de RD$ 45,230 debe pagar hoy o enfrentará cargos legales",
+        "TSS urgente: su cuenta de seguridad social fue suspendida verifique sus datos ahora",
+        "JCE: Su cédula de identidad fue reportada como perdida actualice sus datos en este enlace",
+        "Ministerio de Trabajo: Tiene una demanda laboral pendiente preséntese o pague la multa",
+        "Policía Nacional: Tiene una citación judicial urgente presencia obligatoria mañana a las 8am",
+        "Hacienda: Declaró impuestos incorrectamente debe un reintegro o enfrenta proceso penal",
+        "Migración RD: Su estatus migratorio presenta irregularidades regule su situación hoy mismo",
+        "Procuraduría: Fue mencionado en una investigación penal contacte a su abogado urgente",
+        "DIGESETT: Tiene 5 multas de tránsito impagadas su licencia será suspendida mañana",
+        "Superintendencia de Bancos falsa: su cuenta bancaria fue reportada por lavado de dinero",
+        "INDOTEL: Su línea telefónica será suspendida por uso inapropiado actualice sus datos hoy",
+        "Intendencia de Aduanas: Tiene un paquete retenido pague los aranceles para liberarlo urgente",
+    ] * 7
+
+    spam_amenazas = [
+        "Te voy a matar a ti y a tu familia si no me pagas lo que me debes tienes 24 horas",
+        "Sé dónde estudian tus hijos más te vale pagar o les va a pasar algo muy malo",
+        "Tengo hombres vigilando tu casa si no cooperas esto terminará muy mal para todos",
+        "Eres un objetivo confirmado tienes una semana para salir del país o sufrirás las consecuencias",
+        "El cobro de esta deuda será por las buenas o por las malas la decisión es tuya",
+        "No te dormir tranquilo sabiendo lo que sé de ti mejor página o las cosas se complican",
+        "Última advertencia deposita el dinero en esta cuenta o publicamos todo lo que sabemos",
+        "Matones contratados para hacerte daño pueden cancelarse si pagas antes del domingo",
+        "Grupo de extorsión: hemos tomado control de tu información pages o se la damos a tus jefes",
+        "Somos peligrosos y sabemos dónde encontrarte páganos o verás lo que pasa con tu negocio",
+        "Tengo fotos tuyas con menores de edad falsificadas las publicaré si no me depositas ya",
+        "Tu empresa será destruida reputacionalmente si no pagas la tarifa de protección mensual",
+    ] * 8
+
+    # ── Combinar y devolver ───────────────────────────────────────────────────
+    todos_ham = (
+        ham_bancario + ham_seguridad_digital + ham_personal +
+        ham_redes_sociales + ham_trabajo + ham_ecommerce +
+        ham_educacion + ham_salud + ham_gobierno + ham_noticias
+    )
+    todos_spam = (
+        spam_phishing_bancario + spam_general + spam_extorsion +
+        spam_hackers + spam_fraude_laboral + spam_fraude_romantico +
+        spam_fraude_inversion + spam_redes_falsas + spam_gobierno_falso +
+        spam_amenazas
+    )
 
     textos    = [preprocesar(t) for t in todos_ham + todos_spam]
     etiquetas = ["ham"] * len(todos_ham) + ["spam"] * len(todos_spam)

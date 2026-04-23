@@ -34,13 +34,45 @@ Calcula la probabilidad de que un documento pertenezca a cada clase dado el vect
 
 El modelo se entrena con tres fuentes combinadas:
 
-| Fuente | Tipo | Ejemplos |
-|--------|------|----------|
-| Dataset interno | Correos bancarios RD, phishing, spam general | ~1 500 |
+| Fuente | Tipo | Ejemplos aprox. |
+|--------|------|-----------------|
+| Dataset interno | 10 categorías HAM + 10 categorías SPAM en español | ~4 500 |
 | Feedback del usuario | Correos reales etiquetados por el usuario | Variable |
-| Hugging Face (en background) | SMS Spam Multilingüe | ~5 000+ |
+| Hugging Face (en background) | SMS multilingüe + phishing + email spam | ~15 000+ |
 
-El dataset interno incluye ejemplos específicos del contexto dominicano: alertas de Banco Popular, Banreservas, Qik, Claro RD y patrones de estafa locales.
+### Categorías del dataset interno
+
+El dataset cubre ampliamente los tipos de correo que un usuario dominicano puede recibir:
+
+**HAM (correos legítimos)**
+
+| Categoría | Ejemplos incluidos |
+|-----------|-------------------|
+| Bancario | Alertas Banco Popular, BHD, Banreservas, Qik, APAP, Scotiabank |
+| Seguridad digital | Códigos 2FA de Google, Apple, WhatsApp, GitHub |
+| Personal | Mensajes de trabajo, familia, recordatorios |
+| Redes sociales | Notificaciones de Facebook, Instagram, TikTok, LinkedIn |
+| Trabajo | RR.HH., nómina, capacitaciones, ofertas laborales reales |
+| E-commerce | Amazon, MercadoLibre, AliExpress, confirmaciones de pedido |
+| Educación | ITLA, UASD, PUCMM, Coursera, Udemy |
+| Salud | Citas médicas, resultados de laboratorio, ARS |
+| Gobierno | DGII, TSS, JCE, Migración, Policía Nacional |
+| Noticias | El Listín, Diario Libre, ESPN, Bloomberg, TechCrunch |
+
+**SPAM (correos no deseados o peligrosos)**
+
+| Categoría | Ejemplos incluidos |
+|-----------|-------------------|
+| Phishing bancario | Suplantación de bancos dominicanos, PayPal, Qik |
+| Spam general | Premios falsos, casinos, adelgazantes milagrosos |
+| Extorsión | Sextorsión, chantaje, amenazas de publicar datos |
+| Hackers | Malware, robo de credenciales, alertas falsas de seguridad |
+| Fraude laboral | Trabajos desde casa, reclutamiento falso, mystery shopper |
+| Fraude romántico | Estafas de citas, militares falsos, herencias |
+| Fraude de inversión | Crypto garantizado, robots de trading, pirámides |
+| Redes sociales falsas | Venta de seguidores, bots, hackeo de cuentas |
+| Gobierno falso | DGII, TSS, JCE, Policía suplantados |
+| Amenazas directas | Extorsión violenta, intimidación personal |
 
 ---
 
@@ -53,6 +85,18 @@ P(spam)_final = P(spam)_modelo + Σ(0.15 × palabras_spam_presentes) − Σ(0.15
 ```
 
 El ajuste máximo por dirección es **45 %** para evitar sobreescribir completamente el modelo.
+
+---
+
+### Datasets de Hugging Face (background)
+
+Al entrenar, se descargan hasta tres datasets adicionales en background:
+
+1. **`ashu0311/SMS_Spam_Multilingual_Collection_Dataset`** — SMS spam con versión en español
+2. **`cybersectony/phishing-email-detection-v2.4.1`** — emails de phishing reales en inglés
+3. **`mshenoda/email-spam`** — dataset general de email spam
+
+Cada uno tiene manejo de errores independiente: si uno no está disponible, los demás continúan cargándose sin detener el proceso.
 
 ---
 

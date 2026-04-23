@@ -1,3 +1,4 @@
+/* == VARIABLES CSS == */
 :root {
   --bg-0:       #090c12;
   --bg-1:       #0f1320;
@@ -30,6 +31,7 @@
   --radius-lg:  20px;
 }
 
+/* == RESET Y BASE == */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
@@ -40,6 +42,7 @@ body {
   overflow-x: hidden;
 }
 
+/* Degradados de fondo decorativos fijos, sin interacción */
 body::before {
   content: '';
   position: fixed;
@@ -53,6 +56,7 @@ body::before {
   transform: translateZ(0);
 }
 
+/* == ESTRUCTURA PRINCIPAL == */
 .app-shell {
   display: block;
   min-height: 100vh;
@@ -63,6 +67,7 @@ body::before {
   isolation: isolate;
 }
 
+/* == SIDEBAR == */
 .sidebar {
   grid-row: 1 / -1;
   background: var(--bg-1);
@@ -81,6 +86,7 @@ body::before {
   contain: layout style;
 }
 
+/* == LOGOTIPO == */
 .logo {
   position: sticky;
   top: 0;
@@ -123,6 +129,7 @@ body::before {
   letter-spacing: 0.05em;
 }
 
+/* == NAVEGACIÓN LATERAL == */
 .nav {
   padding: 12px 16px 20px;
   flex: 1;
@@ -162,6 +169,7 @@ body::before {
   padding: 12px 12px 6px;
 }
 
+/* == BOTONES DE NAVEGACIÓN == */
 .nav-btn {
   display: flex; align-items: center; gap: 10px;
   padding: 11px 14px;
@@ -182,6 +190,7 @@ body::before {
 .nav-btn.active { background: var(--accent-dim); color: var(--accent); }
 .nav-btn .icon  { font-size: 17px; width: 24px; text-align: center; }
 
+/* == TOPBAR == */
 .topbar {
   background: var(--bg-1);
   border-bottom: 1px solid var(--border);
@@ -229,6 +238,7 @@ body::before {
   box-shadow: 0 0 8px var(--ham-glow);
 }
 
+/* == ÁREA DE CONTENIDO PRINCIPAL == */
 .main {
   padding: 24px 28px;
   overflow-y: auto;
@@ -257,9 +267,11 @@ body::before {
   background: #4a6cf7;
 }
 
+/* == SECCIONES == */
 .section { display: none; }
 .section.visible { display: block; }
 
+/* == TABLA DE CORREOS == */
 .table-wrap {
   background: var(--bg-1);
   border: 1px solid var(--border);
@@ -281,6 +293,7 @@ body::before {
 
 .table-actions { display: flex; gap: 10px; }
 
+/* == BOTONES GENERALES == */
 .btn {
   padding: 9px 18px;
   border-radius: 9px;
@@ -367,6 +380,7 @@ td {
   color: var(--text-1); font-size: 12px;
 }
 
+/* == BADGES DE CLASIFICACIÓN == */
 .badge {
   display: inline-flex; align-items: center; gap: 5px;
   padding: 4px 10px;
@@ -386,6 +400,7 @@ td {
 .badge-ham  .badge-dot { background: var(--ham);  }
 .badge-sosp .badge-dot { background: var(--sosp); }
 
+/* == PANEL DE CLASIFICACIÓN MANUAL == */
 .classify-panel {
   background: var(--bg-1);
   border: 1px solid var(--border);
@@ -458,6 +473,7 @@ textarea::placeholder { color: var(--text-2); }
 .prob-value.spam { color: var(--spam); }
 .prob-value.ham  { color: var(--ham);  }
 
+/* == PANEL DE APRENDIZAJE (FEEDBACK) == */
 .feedback-panel {
   background: var(--bg-1);
   border: 1px solid var(--border);
@@ -499,6 +515,7 @@ textarea::placeholder { color: var(--text-2); }
 .feedback-resumen-value.spam { color: var(--spam); }
 .feedback-resumen-value.ham  { color: var(--ham); }
 
+/* == FORMULARIO DE PALABRAS CLAVE == */
 input[type="text"] {
   flex: 1;
   background: var(--bg-2);
@@ -530,6 +547,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 .tipo-btn.spam.sel { background: var(--spam-dim); color: var(--spam); border-color: rgba(255,71,87,0.4); }
 .tipo-btn.ham.sel  { background: var(--ham-dim);  color: var(--ham);  border-color: rgba(46,213,115,0.4); }
 
+/* == BANNER DE CONEXIÓN GMAIL == */
 .connect-banner {
   background: var(--bg-1);
   border: 1px solid var(--border);
@@ -557,6 +575,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 }
 .btn-google:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
 
+/* == ESTADOS DE CARGA Y VACÍO == */
 .loading { text-align: center; padding: 48px; color: var(--text-2); font-size: 14px; }
 
 .spinner {
@@ -571,6 +590,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 .empty      { text-align: center; padding: 48px; color: var(--text-2); }
 .empty-icon { font-size: 40px; margin-bottom: 10px; }
 
+/* == NOTIFICACIÓN TOAST == */
 .toast {
   position: fixed; bottom: 28px; right: 28px;
   background: var(--bg-2);
@@ -587,10 +607,12 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 }
 .toast.show { transform: translateY(0); opacity: 1; }
 
+/* == ANIMACIONES == */
 @keyframes spin   { to { transform: rotate(360deg); } }
 @keyframes pulse  { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
 
+/* == INDICADOR DE ÚLTIMA ACTUALIZACIÓN == */
 .last-updated {
   font-size: 11px;
   color: var(--text-2);
@@ -598,6 +620,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   border-bottom: 1px solid var(--border);
 }
 
+/* == RESPONSIVE == */
 @media (max-width: 1100px) {
   .sidebar         { width: 220px; }
   .sidebar .logo   { padding: 0 20px 24px; }
@@ -612,6 +635,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   .correcciones-grupo   { height: 280px; }
 }
 
+/* == LISTA DE CORRECCIONES == */
 .correcciones-seccion { margin-top: 24px; }
 
 .correcciones-grid {
@@ -672,6 +696,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 
 .correcciones-lista::-webkit-scrollbar { display: none; }
 
+/* Degradado inferior para indicar que hay más elementos al hacer scroll */
 .correcciones-grupo::after {
   content: '';
   position: absolute;
@@ -735,6 +760,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 
 .correcciones-empty { padding: 20px 16px; color: var(--text-2); font-size: 13px; text-align: center; }
 
+/* == BARRA DE NIVEL DE CONFIANZA == */
 .nivel-wrap { display: flex; align-items: center; }
 
 .nivel-bar-wrap {
@@ -775,6 +801,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   flex-shrink: 0;
 }
 
+/* == TOOLTIP DEL NIVEL == */
 .nivel-tooltip {
   position: fixed;
   left: 0;
@@ -810,6 +837,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   transform: translateY(0);
 }
 
+/* == MODAL DE CORREO == */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -934,6 +962,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   flex-shrink: 0;
 }
 
+/* == BOTONES DE CATEGORÍA == */
 .nav-categoria {
   display: flex;
   align-items: center;
@@ -970,6 +999,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   color: var(--accent);
 }
 
+/* == PANEL FLOTANTE DE VERIFICACIÓN (FPM) == */
 .feedback-panel-modal {
   position: fixed;
   top: 50%;
@@ -1108,6 +1138,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 }
 .fpm-ok.visible { display: block; }
 
+/* == INDICADOR DE CORREO NO LEÍDO == */
 .dot-nuevo {
   display: inline-block;
   width: 7px;

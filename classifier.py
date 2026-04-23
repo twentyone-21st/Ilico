@@ -1,3 +1,8 @@
+"""
+@file classifier.py
+@brief Motor de clasificación de correos de Ilico. Combina reglas basadas en dominios,
+       detección de estafas y un modelo TF-IDF + Naive Bayes entrenado con datos reales.
+"""
 import re
 import os
 import json
@@ -25,9 +30,11 @@ from sklearn.pipeline import Pipeline
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import accuracy_score
 
+# Ruta del modelo serializado para evitar reentrenar en cada arranque
 MODEL_CACHE = Path(__file__).parent / "modelo_spam.pkl"
 FEEDBACK_CORREOS_FILE = Path(__file__).parent / "feedback_correos.json"
 
+# Dominios de bancos dominicanos conocidos; sus correos se clasifican con alta confianza
 DOMINIOS_BANCARIOS_RD = {
     "bancopopular.com.do", "popular.com.do",
     "qik.com.do", "qikbanco.com.do",
@@ -54,6 +61,7 @@ DOMINIOS_BANCARIOS_RD = {
     "mastercard.com",
 }
 
+# Servicios globales de confianza (Google, Apple, Amazon, etc.)
 DOMINIOS_SERVICIOS_GLOBALES = {
     "google.com", "accounts.google.com", "no-reply.accounts.google.com",
     "googleplay.com", "play.google.com",
@@ -79,6 +87,7 @@ DOMINIOS_SERVICIOS_GLOBALES = {
 
 TODOS_LOS_DOMINIOS_CONFIANZA = DOMINIOS_BANCARIOS_RD | DOMINIOS_SERVICIOS_GLOBALES
 
+# Palabras que indican que un correo de un remitente confiable es transaccional (recibos, alertas)
 PALABRAS_TRANSACCIONAL = {
     "transaccion", "transferencia", "deposito", "retiro", "pago",
     "compra", "consumo", "balance", "estado de cuenta", "factura",
@@ -95,6 +104,7 @@ PALABRAS_TRANSACCIONAL = {
     "descargaste", "instalaste", "actualizaste",
 }
 
+# Palabras que indican contenido promocional (ofertas, descuentos, llamadas a acción)
 PALABRAS_PROMOCIONAL = {
     "oferta", "promocion", "descuento", "gratis", "gana", "premio",
     "exclusivo", "especial", "limitado", "ahorra", "rebaja",
@@ -104,6 +114,7 @@ PALABRAS_PROMOCIONAL = {
     "registrate", "suscribete",
 }
 
+# Stopwords en español eliminadas antes del vectorizado para reducir ruido
 STOPWORDS_ES = {
     "de","la","el","en","y","a","los","se","del","que","un","una","es",
     "por","con","no","su","al","para","como","mas","pero","sus","le","ya",
@@ -117,6 +128,11 @@ STOPWORDS_ES = {
 
 
 def extraer_dominio(remitente: str) -> str:
+    """
+    @brief Extrae el dominio del campo 'From' de un correo en formato 'Nombre <email@dominio.com>'.
+    @param remitente Cadena con el remitente del correo.
+    @return Dominio en minúsculas, o cadena vacía si no se puede extraer.
+    """
     if not remitente:
         return ""
     match = re.search(r'<([^>]+)>', remitente)
@@ -128,6 +144,11 @@ def extraer_dominio(remitente: str) -> str:
 
 
 def es_dominio_confianza(dominio: str) -> tuple:
+    """
+    @brief Verifica si un dominio pertenece a las listas de confianza de bancos o servicios globales.
+    @param dominio Dominio a verificar (ej: 'bancopopular.com.do').
+    @return Tupla (es_confiable: bool, tipo: str) donde tipo es 'banco', 'servicio' o ''.
+    """
     if not dominio:
         return False, ""
 
@@ -147,6 +168,11 @@ def es_dominio_confianza(dominio: str) -> tuple:
 
 
 def analizar_intencion(texto: str) -> str:
+    """
+    @brief Determina si el contenido de un correo es transaccional, promocional o neutro.
+    @param texto Texto del correo a analizar.
+    @return 'transaccional', 'promocional' o 'neutro'.
+    """
     texto_lower = texto.lower()
 
     score_transaccional = sum(1 for p in PALABRAS_TRANSACCIONAL if p in texto_lower)
@@ -160,6 +186,11 @@ def analizar_intencion(texto: str) -> str:
 
 
 def preprocesar(texto: str) -> str:
+    """
+    @brief Normaliza y tokeniza texto para el vectorizador TF-IDF: minúsculas, URLs, montos, stopwords.
+    @param texto Texto crudo del correo.
+    @return Cadena de tokens limpios separados por espacios.
+    """
     texto = texto.lower()
     texto = re.sub(r'http\S+|www\S+', ' url_enlace ', texto)
     texto = re.sub(r'\$[\d,\.]+',  ' monto_dinero ',  texto)
@@ -171,6 +202,11 @@ def preprocesar(texto: str) -> str:
 
 
 def _normalizar_busqueda(texto: str) -> str:
+    """
+    @brief Elimina tildes y convierte a minúsculas para comparaciones insensibles a acentos.
+    @param texto Texto a normalizar.
+    @return Texto sin tildes en minúsculas.
+    """
     t = texto.lower()
     for a, b in (
         ("á", "a"), ("é", "e"), ("í", "i"), ("ó", "o"), ("ú", "u"),
@@ -181,6 +217,11 @@ def _normalizar_busqueda(texto: str) -> str:
 
 
 def _es_estafa_coercion_alto_riesgo(texto: str) -> bool:
+    """
+    @brief Detecta patrones de estafa o coerción: solicitud de datos bancarios combinada con amenazas.
+    @param texto Texto del correo a analizar.
+    @return True si el correo coincide con un patrón de alto riesgo conocido.
+    """
     t = _normalizar_busqueda(texto)
 
     pide_datos = any(
@@ -235,6 +276,16 @@ def _es_estafa_coercion_alto_riesgo(texto: str) -> bool:
 
 def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
                remitente: str = "") -> dict:
+    """
+    @brief Clasifica un correo como SPAM, HAM o SOSPECHOSO usando cuatro capas: correcciones
+           explícitas del usuario, reglas de estafa, dominios de confianza y modelo TF-IDF + Naive Bayes.
+    @param texto     Contenido del correo a clasificar.
+    @param modelo    Pipeline scikit-learn entrenado.
+    @param spam_usr  Lista de palabras que el usuario marcó como indicadores de spam.
+    @param ham_usr   Lista de palabras que el usuario marcó como indicadores de ham.
+    @param remitente Campo 'From' del correo para extraer y verificar el dominio.
+    @return Dict con clasificacion, confianza, prob_spam, prob_ham, ajustado y razon.
+    """
     if not texto.strip():
         return {
             "clasificacion": "INDETERMINADO", "confianza": 0,
@@ -242,6 +293,37 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
             "razon": "Mensaje vacío"
         }
 
+    # Capa 0: las correcciones del usuario tienen prioridad absoluta sobre cualquier otra regla
+    texto_l   = texto.lower()
+    hits_ham  = sum(1 for w in ham_usr  if w in texto_l)
+    hits_spam = sum(1 for w in spam_usr if w in texto_l)
+
+    if hits_ham > 0 and hits_ham >= hits_spam:
+        conf = min(98.0, 70.0 + hits_ham * 10.0)
+        return {
+            "clasificacion": "HAM",
+            "confianza":     conf,
+            "prob_spam":     round(100.0 - conf, 1),
+            "prob_ham":      conf,
+            "prob_spam_f":   round(100.0 - conf, 1),
+            "prob_ham_f":    conf,
+            "ajustado":      True,
+            "razon":         f"Corrección del usuario ({hits_ham} palabra(s) HAM)",
+        }
+    if hits_spam > 0 and hits_spam > hits_ham:
+        conf = min(98.0, 70.0 + hits_spam * 10.0)
+        return {
+            "clasificacion": "SPAM",
+            "confianza":     conf,
+            "prob_spam":     conf,
+            "prob_ham":      round(100.0 - conf, 1),
+            "prob_spam_f":   conf,
+            "prob_ham_f":    round(100.0 - conf, 1),
+            "ajustado":      True,
+            "razon":         f"Corrección del usuario ({hits_spam} palabra(s) SPAM)",
+        }
+
+    # Capa 1: detección de estafas de alto riesgo por patrones léxicos
     if _es_estafa_coercion_alto_riesgo(texto):
         return {
             "clasificacion": "SPAM",
@@ -254,6 +336,7 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
             "razon":         "Patrón de estafa o coerción (datos sensibles + amenaza)",
         }
 
+    # Capa 2: reglas por dominio confiable + análisis de intención
     dominio              = extraer_dominio(remitente)
     confiable, tipo_dom  = es_dominio_confianza(dominio)
 
@@ -294,14 +377,14 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
                 "razon":         f"Dominio de confianza ({tipo_dom})"
             }
 
+    # Capa 3: predicción del modelo NLP con ajuste por palabras del usuario
     probs  = modelo.predict_proba([preprocesar(texto)])[0]
     clases = list(modelo.classes_)
     p_ham  = float(probs[clases.index("ham")])
     p_spam = float(probs[clases.index("spam")])
 
-    texto_l = texto.lower()
-    aj_spam = min(0.45, sum(0.15 for w in spam_usr if w in texto_l))
-    aj_ham  = min(0.45, sum(0.15 for w in ham_usr  if w in texto_l))
+    aj_spam = min(0.45, hits_spam * 0.15)
+    aj_ham  = min(0.45, hits_ham  * 0.15)
 
     p_spam_f = min(1.0, max(0.0, p_spam + aj_spam - aj_ham))
     p_ham_f  = 1.0 - p_spam_f
@@ -324,6 +407,10 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
 
 
 def _construir_pipeline() -> Pipeline:
+    """
+    @brief Construye el pipeline scikit-learn con TF-IDF bigramas y Naive Bayes multinomial.
+    @return Pipeline listo para entrenar.
+    """
     return Pipeline([
         ('tfidf', TfidfVectorizer(
             sublinear_tf=True,
@@ -337,6 +424,10 @@ def _construir_pipeline() -> Pipeline:
 
 
 def _cargar_feedback_correos_desde_json():
+    """
+    @brief Carga los correos reales etiquetados por el usuario para incluirlos en el entrenamiento.
+    @return Tupla (textos, etiquetas) con los ejemplos del historial de feedback.
+    """
     if not FEEDBACK_CORREOS_FILE.exists():
         return [], []
     try:
@@ -368,6 +459,10 @@ def _cargar_feedback_correos_desde_json():
 
 
 def _cargar_desde_huggingface():
+    """
+    @brief Descarga el dataset multilingüe SMS Spam de Hugging Face y lo combina con el dataset interno.
+    @return Tupla (textos, etiquetas) con los datos del dataset ampliado.
+    """
     logger.info("  Descargando dataset desde Hugging Face...")
     dataset = load_dataset("ashu0311/SMS_Spam_Multilingual_Collection_Dataset")
     datos   = dataset[list(dataset.keys())[0]]
@@ -385,6 +480,11 @@ def _cargar_desde_huggingface():
 
 
 def entrenar_modelo(forzar: bool = False) -> tuple:
+    """
+    @brief Carga el modelo desde cache o entrena uno nuevo; lanza mejora con Hugging Face en background.
+    @param forzar Si True, ignora el cache y reentrena aunque exista un modelo guardado.
+    @return Tupla (modelo, accuracy) con el pipeline entrenado y su precisión en el set de prueba.
+    """
     if not forzar and MODEL_CACHE.exists():
         logger.info("  Modelo cargado desde caché.")
         try:
@@ -400,6 +500,7 @@ def entrenar_modelo(forzar: bool = False) -> tuple:
     textos_b.extend(tf)
     etiquetas_b.extend(ef)
 
+    # Incorpora el dataset Enron si está disponible en disco
     from pathlib import Path as _P
     enron_path = _P(__file__).parent / "enron_dataset.csv"
     if enron_path.exists():
@@ -431,6 +532,7 @@ def entrenar_modelo(forzar: bool = False) -> tuple:
     except Exception:
         pass
 
+    # Mejora opcional en background con dataset ampliado de Hugging Face
     if HF_AVAILABLE:
         import threading as _t
         def _mejorar_con_hf():
@@ -457,6 +559,10 @@ def entrenar_modelo(forzar: bool = False) -> tuple:
 
 
 def _dataset_interno():
+    """
+    @brief Devuelve el dataset base hardcodeado con ejemplos de ham bancario/seguridad y spam típico dominicano.
+    @return Tupla (textos_preprocesados, etiquetas) lista para entrenamiento.
+    """
     ham_bancario = [
         "Su tarjeta terminada en 4521 fue utilizada por RD$ 2,350.00 en Supermercados Nacional el 12/04/2026",
         "Transferencia recibida de Juan Perez por RD$ 5,000.00 a su cuenta corriente 001-234567-8",

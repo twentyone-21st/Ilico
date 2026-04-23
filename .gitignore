@@ -20,3 +20,6 @@ traduccion_checkpoint.json
 
 # Archivos de sesión y runtime
 *.log
+
+# Documentación generada (MkDocs build output)
+site/

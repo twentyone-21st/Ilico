@@ -1,3 +1,7 @@
+"""
+@file app.py
+@brief Servidor Flask de Ilico. Gestiona el cache de correos, autenticación OAuth y la API REST.
+"""
 import os
 import json
 import logging
@@ -19,10 +23,25 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "ilico-dev-2025")
 
+# Marca el momento exacto en que este proceso arrancó
+_SERVER_START_TS = time.time()
+
+# Invalida automáticamente tokens de deploys anteriores al arrancar
+_TOKEN_PATH = Path(__file__).parent / "token.json"
+if _TOKEN_PATH.exists():
+    try:
+        if _TOKEN_PATH.stat().st_mtime < _SERVER_START_TS - 2:
+            _TOKEN_PATH.unlink()
+            logger.info("  [auth] Token anterior eliminado — el usuario deberá iniciar sesión.")
+    except Exception:
+        pass
+
+# Estado global del modelo de clasificación
 _MODELO   = None
 _ACCURACY = None
 _MODELO_LISTO = threading.Event()
 
+# Cache en memoria con dos categorías; evita llamar a Gmail en cada request
 _CACHE = {
     "principal":  {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
     "archivados": {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
@@ -31,6 +50,7 @@ _CACHE_LOCK   = threading.Lock()
 _LIMITE       = 1000
 _TTL_SEGUNDOS = 5 * 60
 
+# Palabras enseñadas por el usuario para ajustar el clasificador en tiempo real
 _SPAM_USR = []
 _HAM_USR  = []
 
@@ -40,6 +60,9 @@ _FEEDBACK_LOCK        = threading.Lock()
 
 
 def _cargar_correcciones():
+    """
+    @brief Carga las palabras de corrección del usuario desde disco al arrancar el servidor.
+    """
     global _SPAM_USR, _HAM_USR
     if _CORRECCIONES_FILE.exists():
         try:
@@ -51,6 +74,9 @@ def _cargar_correcciones():
 
 
 def _guardar_correcciones():
+    """
+    @brief Persiste las listas de corrección en JSON para que sobrevivan reinicios del servidor.
+    """
     try:
         _CORRECCIONES_FILE.write_text(
             json.dumps({"spam": _SPAM_USR, "ham": _HAM_USR}, ensure_ascii=False, indent=2),
@@ -61,6 +87,12 @@ def _guardar_correcciones():
 
 
 def _guardar_feedback(texto: str, etiqueta: str, correo_id: str = None):
+    """
+    @brief Almacena un correo real etiquetado para mejorar futuros reentrenamientos del modelo.
+    @param texto    Contenido del correo a registrar.
+    @param etiqueta Clasificación correcta: 'spam' o 'ham'.
+    @param correo_id ID opcional del mensaje en Gmail.
+    """
     texto = (texto or "").strip()
     if not texto or etiqueta not in ("spam", "ham"):
         return
@@ -82,6 +114,11 @@ def _guardar_feedback(texto: str, etiqueta: str, correo_id: str = None):
 
 
 def _stats(correos):
+    """
+    @brief Calcula totales de SPAM, HAM y SOSPECHOSO sobre una lista de correos clasificados.
+    @param correos Lista de dicts con campo 'clasificacion'.
+    @return Dict con claves total, spam, ham, sospechoso.
+    """
     return {
         "total":      len(correos),
         "spam":       sum(1 for c in correos if c.get("clasificacion") == "SPAM"),
@@ -91,6 +128,11 @@ def _stats(correos):
 
 
 def _dedup(correos):
+    """
+    @brief Elimina correos duplicados por ID conservando el primero encontrado.
+    @param correos Lista de dicts de correos.
+    @return Lista sin duplicados.
+    """
     vistos, resultado = set(), []
     for c in correos:
         mid = str(c.get("id") or "").strip()
@@ -101,6 +143,11 @@ def _dedup(correos):
 
 
 def _clasificar_lote(correos_raw):
+    """
+    @brief Aplica el clasificador a cada correo y devuelve la lista enriquecida con la predicción.
+    @param correos_raw Lista de dicts con id, asunto, remite y texto_clasificar.
+    @return Lista de dicts con clasificacion, confianza, prob_spam, prob_ham y razon añadidos.
+    """
     resultado = []
     for c in correos_raw:
         try:
@@ -127,6 +174,12 @@ def _clasificar_lote(correos_raw):
 
 
 def _cargar_categoria(categoria: str, cantidad: int, reemplazar: bool):
+    """
+    @brief Descarga correos de Gmail, los clasifica y actualiza el cache de la categoría indicada.
+    @param categoria  'principal' o 'archivados'.
+    @param cantidad   Número máximo de correos a obtener.
+    @param reemplazar Si True reemplaza el cache completo; si False fusiona con los existentes.
+    """
     try:
         correos_raw = listar_correos(max_resultados=cantidad, categoria=categoria)
         clasificados = _clasificar_lote(correos_raw)
@@ -135,6 +188,7 @@ def _cargar_categoria(categoria: str, cantidad: int, reemplazar: bool):
             if reemplazar:
                 nuevo = _dedup(clasificados)
             else:
+                # Fusión: antepone los nuevos para no perder los ya clasificados
                 ids_previos = {str(c.get("id")) for c in bucket["correos"]}
                 nuevos = [c for c in clasificados if str(c.get("id")) not in ids_previos]
                 nuevo  = _dedup(nuevos + bucket["correos"])
@@ -151,10 +205,18 @@ def _cargar_categoria(categoria: str, cantidad: int, reemplazar: bool):
 
 
 def _cache_vencido(categoria):
+    """
+    @brief Indica si el cache de una categoría superó el TTL de 5 minutos.
+    @param categoria Clave del bucket de cache.
+    @return True si el cache está vencido y debe recargarse.
+    """
     return (time.time() - _CACHE[categoria]["ts"]) > _TTL_SEGUNDOS
 
 
 def _arrancar_modelo():
+    """
+    @brief Entrena o carga el modelo en un hilo daemon para no bloquear el arranque del servidor.
+    """
     global _MODELO, _ACCURACY
     logger.info("  [modelo] Cargando en background...")
     try:
@@ -173,17 +235,28 @@ threading.Thread(target=_arrancar_modelo, daemon=True).start()
 
 
 def _esperar_modelo(timeout=90):
+    """
+    @brief Bloquea hasta que el modelo esté disponible o expire el timeout.
+    @param timeout Segundos máximos de espera.
+    @return El modelo entrenado, o None si falló la carga.
+    """
     _MODELO_LISTO.wait(timeout=timeout)
     return _MODELO
 
 
 @app.route("/")
 def index():
+    """
+    @brief Renderiza la interfaz principal e informa al template si el usuario está autenticado.
+    """
     return render_template("index.html", autenticado=esta_autenticado())
 
 
 @app.route("/auth/gmail")
 def auth_gmail():
+    """
+    @brief Inicia el flujo OAuth2 con Google y redirige al usuario a la pantalla de autorización.
+    """
     try:
         railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
         uri = f"https://{railway}/auth/callback" if railway else url_for("auth_callback", _external=True)
@@ -196,6 +269,9 @@ def auth_gmail():
 
 @app.route("/auth/callback")
 def auth_callback():
+    """
+    @brief Recibe el código OAuth de Google, lo intercambia por un token y redirige al inicio.
+    """
     codigo = request.args.get("code")
     if not codigo:
         return redirect(url_for("index"))
@@ -210,6 +286,9 @@ def auth_callback():
 
 @app.route("/auth/logout")
 def logout():
+    """
+    @brief Elimina el token de Gmail y limpia el cache en memoria, cerrando la sesión del usuario.
+    """
     token = Path(__file__).parent / "token.json"
     token.unlink(missing_ok=True)
     with _CACHE_LOCK:
@@ -222,6 +301,9 @@ def logout():
 
 @app.route("/api/perfil")
 def api_perfil():
+    """
+    @brief Devuelve el email y total de mensajes del usuario autenticado en Gmail.
+    """
     if not esta_autenticado():
         return jsonify({"autenticado": False})
     perfil = obtener_perfil_usuario()
@@ -231,6 +313,10 @@ def api_perfil():
 
 @app.route("/api/correos")
 def api_correos():
+    """
+    @brief Devuelve los correos clasificados del cache; lanza carga en fondo si el cache está vacío o vencido.
+    @return JSON con correos, stats, loading y desde_cache.
+    """
     if not esta_autenticado():
         return jsonify({"error": "No autenticado"}), 401
 
@@ -248,6 +334,7 @@ def api_correos():
         vencido     = _cache_vencido(cat)
         cargando    = _CACHE[cat]["cargando"]
 
+    # Carga inicial: 30 correos rápidos en primer plano, luego ampliación a _LIMITE en background
     if not tiene_cache or forzar:
         if not cargando:
             with _CACHE_LOCK:
@@ -292,6 +379,9 @@ def api_correos():
 
 @app.route("/api/correos/cache")
 def api_correos_cache():
+    """
+    @brief Devuelve el estado actual del cache sin disparar cargas; usado por el polling del frontend cada 5 s.
+    """
     cat = request.args.get("categoria", "principal")
     if cat not in _CACHE:
         cat = "principal"
@@ -313,6 +403,10 @@ def api_correos_cache():
 
 @app.route("/api/correo/<mensaje_id>")
 def api_correo_detalle(mensaje_id):
+    """
+    @brief Devuelve el contenido completo de un correo, fusionando la clasificación del cache si existe.
+    @param mensaje_id ID del mensaje en Gmail.
+    """
     if not esta_autenticado():
         return jsonify({"error": "No autenticado"}), 401
 
@@ -345,6 +439,9 @@ def api_correo_detalle(mensaje_id):
 
 @app.route("/api/clasificar", methods=["POST"])
 def api_clasificar():
+    """
+    @brief Clasifica un texto enviado manualmente por el usuario y devuelve la predicción del modelo.
+    """
     data  = request.get_json(silent=True) or {}
     texto = data.get("texto", "").strip()
     if not texto:
@@ -359,6 +456,9 @@ def api_clasificar():
 
 @app.route("/api/feedback", methods=["POST"])
 def api_feedback():
+    """
+    @brief Añade palabras clave a la lista de corrección del usuario y guarda el correo como ejemplo de entrenamiento.
+    """
     global _SPAM_USR, _HAM_USR
     data = request.get_json(silent=True) or {}
     tipo = data.get("tipo", "").lower()
@@ -403,11 +503,17 @@ def api_feedback():
 
 @app.route("/api/correcciones")
 def api_correcciones():
+    """
+    @brief Devuelve las listas actuales de palabras de corrección registradas por el usuario.
+    """
     return jsonify({"spam": _SPAM_USR, "ham": _HAM_USR})
 
 
 @app.route("/api/correcciones/sincronizar", methods=["POST"])
 def api_sincronizar_correcciones():
+    """
+    @brief Fusiona las correcciones guardadas en localStorage del cliente con las del servidor.
+    """
     global _SPAM_USR, _HAM_USR
     data = request.get_json(silent=True) or {}
     spam_new = [str(p).lower().strip() for p in data.get("spam", []) if len(str(p).strip()) > 2]
@@ -424,6 +530,9 @@ def api_sincronizar_correcciones():
 
 @app.route("/api/correcciones/eliminar", methods=["POST"])
 def api_eliminar_correccion():
+    """
+    @brief Elimina una palabra específica de la lista de correcciones spam o ham del usuario.
+    """
     global _SPAM_USR, _HAM_USR
     data    = request.get_json(silent=True) or {}
     palabra = data.get("palabra", "").lower().strip()
@@ -440,6 +549,9 @@ def api_eliminar_correccion():
 
 @app.route("/api/correcciones/editar", methods=["POST"])
 def api_editar_correccion():
+    """
+    @brief Reemplaza una palabra de corrección existente por una nueva dentro de la misma categoría.
+    """
     global _SPAM_USR, _HAM_USR
     data   = request.get_json(silent=True) or {}
     ant    = data.get("palabra_anterior", "").lower().strip()
@@ -459,6 +571,9 @@ def api_editar_correccion():
 
 @app.route("/api/stats")
 def api_stats():
+    """
+    @brief Devuelve la precisión del modelo y el recuento de palabras de corrección del usuario.
+    """
     return jsonify({
         "accuracy":          round((_ACCURACY or 0) * 100, 1),
         "correcciones_spam": len(_SPAM_USR),
@@ -468,6 +583,9 @@ def api_stats():
 
 @app.route("/api/reentrenar", methods=["POST"])
 def api_reentrenar():
+    """
+    @brief Borra el modelo en cache y lanza un reentrenamiento completo en background.
+    """
     global _MODELO, _ACCURACY
     MODEL_CACHE.unlink(missing_ok=True)
     _MODELO   = None
@@ -479,6 +597,9 @@ def api_reentrenar():
 
 @app.route("/api/webhook/gmail", methods=["POST"])
 def webhook_gmail():
+    """
+    @brief Recibe notificaciones push de Gmail y dispara una recarga del cache en background.
+    """
     envelope = request.get_json(silent=True)
     if not envelope or "message" not in envelope:
         return "OK", 200

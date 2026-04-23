@@ -1,0 +1,28 @@
+name: Publicar documentación en GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "docs/**"
+      - "mkdocs.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install mkdocs-material mkdocstrings[python] mkdocs-minify-plugin
+
+      - name: Publicar en GitHub Pages
+        run: mkdocs gh-deploy --force

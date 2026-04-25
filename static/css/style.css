@@ -1138,6 +1138,68 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 }
 .fpm-ok.visible { display: block; }
 
+/* == BOTÓN LIMPIAR SPAM == */
+.btn-limpiar {
+  background: var(--sosp-dim);
+  color: var(--sosp);
+  border: 1px solid rgba(255,165,2,0.35);
+  padding: 8px 16px;
+  border-radius: 9px;
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+.btn-limpiar:hover    { background: rgba(255,165,2,0.2); transform: translateY(-1px); }
+.btn-limpiar:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+/* == CUARENTENA: badge en rojo cuando está activa == */
+.nav-cuarentena.active           { background: var(--spam-dim); color: var(--spam); }
+.nav-cuarentena.active .cat-badge { background: var(--spam-dim); color: var(--spam); }
+
+/* == MENÚ CONTEXTUAL == */
+.ctx-menu {
+  position: fixed;
+  z-index: 9000;
+  background: var(--bg-2);
+  border: 1px solid var(--border-md);
+  border-radius: 11px;
+  padding: 5px 0;
+  min-width: 210px;
+  box-shadow: 0 12px 40px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
+  display: none;
+  animation: fadeIn 0.12s ease;
+  overflow: hidden;
+}
+.ctx-menu.visible { display: block; }
+
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 16px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: var(--text-1);
+  transition: background 0.12s, color 0.12s;
+  white-space: nowrap;
+  user-select: none;
+}
+.ctx-item:hover              { background: var(--bg-3); color: var(--text-0); }
+.ctx-item.ctx-danger         { color: var(--spam); }
+.ctx-item.ctx-danger:hover   { background: var(--spam-dim); color: var(--spam); }
+.ctx-item.ctx-restore        { color: var(--ham); }
+.ctx-item.ctx-restore:hover  { background: var(--ham-dim); color: var(--ham); }
+.ctx-item .ctx-icon          { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+
+.ctx-sep {
+  height: 1px;
+  background: var(--border);
+  margin: 4px 0;
+}
+
 /* == INDICADOR DE CORREO NO LEÍDO == */
 .dot-nuevo {
   display: inline-block;

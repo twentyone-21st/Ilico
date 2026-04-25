@@ -15,6 +15,8 @@ from gmail_service import (
     crear_flujo_oauth, guardar_credenciales_desde_codigo,
     obtener_credenciales, listar_correos, obtener_perfil_usuario,
     obtener_correo_por_id,
+    archivar_correo, desarchivar_correo, mover_a_cuarentena,
+    restaurar_de_cuarentena, eliminar_correo,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -70,6 +72,7 @@ def _get_user_cache(user_id: str) -> dict:
             _CACHE[user_id] = {
                 "principal":  {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
                 "archivados": {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
+                "cuarentena": {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
             }
         return _CACHE[user_id]
 
@@ -354,7 +357,7 @@ def api_correos():
         return jsonify({"error": "Modelo no disponible", "correos": [], "stats": {}, "loading": True, "nuevos": 0}), 503
 
     cat    = request.args.get("categoria", "principal")
-    if cat not in ("principal", "archivados"):
+    if cat not in ("principal", "archivados", "cuarentena"):
         cat = "principal"
     forzar = request.args.get("refresh", "0") == "1"
 
@@ -419,7 +422,7 @@ def api_correos_cache():
                         "stale": False, "loading": False, "vacio": True})
 
     cat = request.args.get("categoria", "principal")
-    if cat not in ("principal", "archivados"):
+    if cat not in ("principal", "archivados", "cuarentena"):
         cat = "principal"
 
     user_cache = _get_user_cache(user_id)
@@ -609,6 +612,105 @@ def api_editar_correccion():
     lista[lista.index(ant)] = nueva
     _guardar_correcciones()
     return jsonify({"ok": True, "mensaje": f"'{ant}' → '{nueva}' actualizada.", "total_spam": len(_SPAM_USR), "total_ham": len(_HAM_USR)})
+
+
+def _ejecutar_accion(accion_fn, mensaje_id: str, invalidar_cats: list):
+    """
+    @brief Ejecuta una acción sobre un mensaje de Gmail y actualiza el cache en memoria.
+    @param accion_fn     Función de gmail_service a invocar (recibe creds, mensaje_id).
+    @param mensaje_id    ID del mensaje a procesar.
+    @param invalidar_cats Categorías cuyo cache debe eliminarse tras la acción.
+    @return Respuesta JSON con ok:True o error.
+    """
+    creds = _get_creds()
+    if not creds:
+        return jsonify({"error": "No autenticado"}), 401
+    user_id = _get_user_id()
+    try:
+        accion_fn(creds, mensaje_id)
+        with _CACHE_LOCK:
+            user_cache = _get_user_cache(user_id)
+            for cat in user_cache:
+                user_cache[cat]["correos"] = [
+                    c for c in user_cache[cat]["correos"] if c.get("id") != mensaje_id
+                ]
+                user_cache[cat]["stats"] = _stats(user_cache[cat]["correos"])
+            for cat in invalidar_cats:
+                if cat in user_cache:
+                    user_cache[cat]["ts"] = 0.0
+        return jsonify({"ok": True})
+    except Exception as e:
+        logger.error(f"Error en acción sobre {mensaje_id}: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/correo/<mensaje_id>/archivar", methods=["POST"])
+def api_archivar(mensaje_id):
+    """@brief Archiva un correo (quita INBOX). Aparece en Archivados de Ilico."""
+    return _ejecutar_accion(archivar_correo, mensaje_id, invalidar_cats=["archivados"])
+
+
+@app.route("/api/correo/<mensaje_id>/desarchivar", methods=["POST"])
+def api_desarchivar(mensaje_id):
+    """@brief Desarchiva un correo (añade INBOX de vuelta). Aparece en Principal."""
+    return _ejecutar_accion(desarchivar_correo, mensaje_id, invalidar_cats=["principal"])
+
+
+@app.route("/api/correo/<mensaje_id>/cuarentena", methods=["POST"])
+def api_mover_cuarentena(mensaje_id):
+    """@brief Mueve un correo a Cuarentena (carpeta Spam de Gmail)."""
+    return _ejecutar_accion(mover_a_cuarentena, mensaje_id, invalidar_cats=["cuarentena"])
+
+
+@app.route("/api/correo/<mensaje_id>/restaurar", methods=["POST"])
+def api_restaurar(mensaje_id):
+    """@brief Restaura un correo de Cuarentena a la bandeja Principal."""
+    return _ejecutar_accion(restaurar_de_cuarentena, mensaje_id, invalidar_cats=["principal"])
+
+
+@app.route("/api/correo/<mensaje_id>/eliminar", methods=["POST"])
+def api_eliminar_correo(mensaje_id):
+    """@brief Mueve un correo a la Papelera de Gmail."""
+    return _ejecutar_accion(eliminar_correo, mensaje_id, invalidar_cats=[])
+
+
+@app.route("/api/correos/limpiar", methods=["POST"])
+def api_limpiar_bandeja():
+    """
+    @brief Mueve en lote a Cuarentena todos los IDs de correos indicados.
+    @return JSON con movidos (exitosos) y errores.
+    """
+    creds = _get_creds()
+    if not creds:
+        return jsonify({"error": "No autenticado"}), 401
+    user_id = _get_user_id()
+    data = request.get_json(silent=True) or {}
+    ids  = [str(i) for i in data.get("ids", []) if i]
+    if not ids:
+        return jsonify({"error": "Sin correos para limpiar"}), 400
+
+    movidos, errores = 0, 0
+    ids_ok = []
+    for msg_id in ids:
+        try:
+            mover_a_cuarentena(creds, msg_id)
+            ids_ok.append(msg_id)
+            movidos += 1
+        except Exception as e:
+            logger.error(f"Error moviendo {msg_id} a cuarentena: {e}")
+            errores += 1
+
+    ids_set = set(ids_ok)
+    with _CACHE_LOCK:
+        user_cache = _get_user_cache(user_id)
+        for cat in ("principal", "archivados"):
+            user_cache[cat]["correos"] = [
+                c for c in user_cache[cat]["correos"] if c.get("id") not in ids_set
+            ]
+            user_cache[cat]["stats"] = _stats(user_cache[cat]["correos"])
+        user_cache["cuarentena"]["ts"] = 0.0
+
+    return jsonify({"ok": True, "movidos": movidos, "errores": errores})
 
 
 @app.route("/api/stats")

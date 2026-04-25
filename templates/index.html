@@ -35,6 +35,10 @@
         <span class="cat-icon">🗄️</span> Archivados
         <span class="cat-badge" id="badge-archivados">—</span>
       </button>
+      <button class="nav-categoria nav-cuarentena" onclick="cambiarCategoria('cuarentena', this)">
+        <span class="cat-icon">⚠️</span> Cuarentena
+        <span class="cat-badge" id="badge-cuarentena">—</span>
+      </button>
 
       <div class="nav-label" style="margin-top:8px">Herramientas</div>
       <button class="nav-btn" onclick="mostrarSeccion('clasificar', this)">
@@ -101,7 +105,11 @@
                 En vivo
               </div>
             </div>
-            <div class="table-actions"></div>
+            <div class="table-actions">
+              <button class="btn btn-limpiar" id="btn-limpiar" onclick="limpiarBandeja()" style="display:none" {% if not autenticado %}disabled{% endif %}>
+                🧹 Limpiar SPAM
+              </button>
+            </div>
           </div>
 
           <!-- Contenido dinámico: spinner, tabla o estado vacío inyectado por JS -->
@@ -285,6 +293,9 @@
   </div>
 </div>
 <!-- /PANEL FLOTANTE -->
+
+<!-- MENÚ CONTEXTUAL: aparece al hacer clic derecho sobre una fila de correo -->
+<div class="ctx-menu" id="ctx-menu"></div>
 
 <!-- TOAST: notificación temporal en esquina inferior derecha -->
 <div class="toast" id="toast"></div>

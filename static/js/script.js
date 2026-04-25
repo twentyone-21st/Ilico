@@ -9,6 +9,7 @@ let _fpmCorreoId    = null;
 let _cargandoFondo  = false;
 let _tooltipEl      = null;
 let _correosLeidos  = new Set(JSON.parse(localStorage.getItem('ilico_leidos') || '[]'));
+let _ctxCorreoId    = null;   // ID del correo sobre el que se abrió el menú contextual
 
 // == INICIALIZACIÓN ==
 document.addEventListener('DOMContentLoaded', () => {
@@ -20,6 +21,7 @@ document.addEventListener('DOMContentLoaded', () => {
   prepararLogout();
   iniciarTooltipNivel();
   cargarDesdeCache();
+  _iniciarMenuContextual();
 });
 
 /**
@@ -33,7 +35,7 @@ function prepararLogout() {
     detenerAutoRefresh();
     todosLosCorreos = [];
     _mapaCorreos    = {};
-    ['badge-principal','badge-archivados'].forEach(id => {
+    ['badge-principal','badge-archivados','badge-cuarentena'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = '—';
     });
@@ -171,6 +173,8 @@ async function cargarCorreos(forzar = false) {
         '<div class="empty"><div class="empty-icon">⚠️</div><div>Error al conectar con Gmail</div></div>';
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Actualizar'; }
+    const btnL = document.getElementById('btn-limpiar');
+    if (btnL) btnL.style.display = categoriaActiva === 'principal' ? '' : 'none';
   }
 }
 
@@ -244,8 +248,12 @@ async function cambiarCategoria(categoria, btn) {
   const titulos = {
     principal:  'Bandeja de entrada · Principal',
     archivados: 'Bandeja de entrada · Archivados',
+    cuarentena: 'Cuarentena',
   };
   document.getElementById('topbar-title').textContent = titulos[categoria] || 'Bandeja de entrada';
+
+  const btnLimpiar = document.getElementById('btn-limpiar');
+  if (btnLimpiar) btnLimpiar.style.display = categoria === 'principal' ? '' : 'none';
 
   try {
     const r = await fetch('/api/correos/cache?categoria=' + encodeURIComponent(categoria));
@@ -920,4 +928,156 @@ function mostrarToast(msg) {
   t.textContent = msg;
   t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3200);
+}
+
+// ============================================================
+// == GUARDIA — menú contextual y acciones sobre correos     ==
+// ============================================================
+
+/**
+ * @brief Registra los eventos necesarios para mostrar y cerrar el menú contextual.
+ */
+function _iniciarMenuContextual() {
+  document.addEventListener('contextmenu', e => {
+    const fila = e.target.closest('tr[data-id]');
+    if (!fila) return;
+    e.preventDefault();
+    _ctxCorreoId = fila.dataset.id;
+    _mostrarCtxMenu(e.clientX, e.clientY);
+  });
+
+  document.addEventListener('click',   () => _cerrarCtxMenu());
+  document.addEventListener('keydown',  e => { if (e.key === 'Escape') _cerrarCtxMenu(); });
+  document.addEventListener('scroll',   () => _cerrarCtxMenu(), true);
+}
+
+/**
+ * @brief Posiciona y muestra el menú contextual con las opciones de la categoría activa.
+ * @param {number} x Posición horizontal del cursor.
+ * @param {number} y Posición vertical del cursor.
+ */
+function _mostrarCtxMenu(x, y) {
+  const menu = document.getElementById('ctx-menu');
+  if (!menu) return;
+
+  const opciones = {
+    principal: [
+      { icon: '📧', label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
+      { sep: true },
+      { icon: '🗄️', label: 'Archivar',             fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/archivar','Correo archivado.')` },
+      { icon: '⚠️', label: 'Mover a Cuarentena',  fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo movido a Cuarentena.')`, cls: 'ctx-danger' },
+      { icon: '🗑️', label: 'Eliminar',             fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo enviado a la Papelera.')`, cls: 'ctx-danger' },
+    ],
+    archivados: [
+      { icon: '📧', label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
+      { sep: true },
+      { icon: '📥', label: 'Desarchivar',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/desarchivar','Correo movido a Principal.')` },
+      { icon: '⚠️', label: 'Mover a Cuarentena',  fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo movido a Cuarentena.')`, cls: 'ctx-danger' },
+      { icon: '🗑️', label: 'Eliminar',             fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo enviado a la Papelera.')`, cls: 'ctx-danger' },
+    ],
+    cuarentena: [
+      { icon: '📧', label: 'Ver correo',           fn: `abrirCorreo('${_ctxCorreoId}')` },
+      { sep: true },
+      { icon: '✅', label: 'Marcar como deseado',  fn: `_restaurarCorreo('${_ctxCorreoId}')`, cls: 'ctx-restore' },
+      { icon: '🗑️', label: 'Eliminar',             fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo enviado a la Papelera.')`, cls: 'ctx-danger' },
+    ],
+  };
+
+  const items = opciones[categoriaActiva] || opciones.principal;
+  menu.innerHTML = items.map(o =>
+    o.sep
+      ? '<div class="ctx-sep"></div>'
+      : `<div class="ctx-item ${o.cls || ''}" onclick="${o.fn};_cerrarCtxMenu()">
+           <span class="ctx-icon">${o.icon}</span>${o.label}
+         </div>`
+  ).join('');
+
+  // Ajustar posición para que no salga de la ventana
+  menu.style.left = '-9999px';
+  menu.style.top  = '-9999px';
+  menu.classList.add('visible');
+  const mw = menu.offsetWidth;
+  const mh = menu.offsetHeight;
+  menu.style.left = (x + mw > window.innerWidth  ? x - mw : x) + 'px';
+  menu.style.top  = (y + mh > window.innerHeight ? y - mh : y) + 'px';
+}
+
+/**
+ * @brief Oculta el menú contextual.
+ */
+function _cerrarCtxMenu() {
+  const menu = document.getElementById('ctx-menu');
+  if (menu) menu.classList.remove('visible');
+  _ctxCorreoId = null;
+}
+
+/**
+ * @brief Ejecuta una acción POST sobre un correo, lo elimina del estado local y muestra toast.
+ * @param {string} id       ID del correo.
+ * @param {string} url      Endpoint a llamar.
+ * @param {string} toastMsg Mensaje de confirmación para el toast.
+ */
+async function _accionCorreo(id, url, toastMsg) {
+  try {
+    const r = await fetch(url, { method: 'POST' });
+    if (!r.ok) { mostrarToast('Error al ejecutar la acción.'); return; }
+    todosLosCorreos = todosLosCorreos.filter(c => String(c.id) !== String(id));
+    renderTabla(todosLosCorreos);
+    actualizarBadge(categoriaActiva, { total: todosLosCorreos.length });
+    mostrarToast(toastMsg);
+  } catch {
+    mostrarToast('Error al conectar con el servidor.');
+  }
+}
+
+/**
+ * @brief Restaura un correo de Cuarentena a Principal y enseña al modelo como HAM.
+ * @param {string} id ID del correo a restaurar.
+ */
+async function _restaurarCorreo(id) {
+  await _accionCorreo(id, `/api/correo/${id}/restaurar`, 'Correo restaurado a Principal.');
+  const cache = _mapaCorreos[id];
+  if (cache && cache.texto_clasificar) {
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ palabras: [], tipo: 'ham', texto_clasificar: cache.texto_clasificar, correo_id: id })
+    }).catch(() => {});
+  }
+}
+
+/**
+ * @brief Mueve a Cuarentena todos los correos clasificados como SPAM en la vista actual.
+ */
+async function limpiarBandeja() {
+  const candidatos = todosLosCorreos.filter(c => c.clasificacion === 'SPAM' && (c.confianza || 0) >= 70);
+  if (!candidatos.length) {
+    mostrarToast('No hay correos SPAM detectados con confianza suficiente.');
+    return;
+  }
+
+  const btn = document.getElementById('btn-limpiar');
+  if (btn) { btn.disabled = true; btn.textContent = 'Limpiando...'; }
+
+  try {
+    const r = await fetch('/api/correos/limpiar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: candidatos.map(c => c.id) })
+    });
+    const d = await r.json();
+    if (d.ok) {
+      const ids = new Set(candidatos.map(c => String(c.id)));
+      todosLosCorreos = todosLosCorreos.filter(c => !ids.has(String(c.id)));
+      renderTabla(todosLosCorreos);
+      actualizarBadge(categoriaActiva, { total: todosLosCorreos.length });
+      mostrarToast(`${d.movidos} correo${d.movidos !== 1 ? 's' : ''} enviado${d.movidos !== 1 ? 's' : ''} a Cuarentena.`);
+    } else {
+      mostrarToast('Error al limpiar la bandeja.');
+    }
+  } catch {
+    mostrarToast('Error al conectar con el servidor.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🧹 Limpiar SPAM'; }
+  }
 }

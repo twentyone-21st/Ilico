@@ -33,6 +33,7 @@ CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
 QUERY_POR_CATEGORIA = {
     "principal":  "label:INBOX",
     "archivados": "-label:INBOX -label:DRAFT -label:SENT -label:TRASH -label:SPAM",
+    "cuarentena": "label:SPAM -label:TRASH",
 }
 
 
@@ -308,6 +309,47 @@ def obtener_correo_por_id(creds, mensaje_id: str):
     except Exception as e:
         logger.error(f"Error obteniendo correo {mensaje_id}: {e}")
         return None
+
+
+def _modificar_etiquetas(creds, mensaje_id: str, agregar: list = None, quitar: list = None):
+    """
+    @brief Añade y/o quita etiquetas de Gmail a un mensaje.
+    @param agregar Lista de IDs de etiquetas a añadir (ej. ['INBOX', 'SPAM']).
+    @param quitar  Lista de IDs de etiquetas a quitar.
+    """
+    servicio = obtener_servicio(creds)
+    body = {}
+    if agregar:
+        body["addLabelIds"]    = agregar
+    if quitar:
+        body["removeLabelIds"] = quitar
+    return servicio.users().messages().modify(userId="me", id=mensaje_id, body=body).execute()
+
+
+def archivar_correo(creds, mensaje_id: str):
+    """@brief Quita el label INBOX (archiva el correo)."""
+    return _modificar_etiquetas(creds, mensaje_id, quitar=["INBOX"])
+
+
+def desarchivar_correo(creds, mensaje_id: str):
+    """@brief Añade el label INBOX de vuelta (desarchiva el correo)."""
+    return _modificar_etiquetas(creds, mensaje_id, agregar=["INBOX"])
+
+
+def mover_a_cuarentena(creds, mensaje_id: str):
+    """@brief Añade label SPAM y quita INBOX — mueve a la carpeta Spam de Gmail."""
+    return _modificar_etiquetas(creds, mensaje_id, agregar=["SPAM"], quitar=["INBOX"])
+
+
+def restaurar_de_cuarentena(creds, mensaje_id: str):
+    """@brief Quita label SPAM y añade INBOX — restaura el correo a la bandeja principal."""
+    return _modificar_etiquetas(creds, mensaje_id, quitar=["SPAM"], agregar=["INBOX"])
+
+
+def eliminar_correo(creds, mensaje_id: str):
+    """@brief Mueve el correo a la Papelera de Gmail (messages.trash)."""
+    servicio = obtener_servicio(creds)
+    return servicio.users().messages().trash(userId="me", id=mensaje_id).execute()
 
 
 def obtener_perfil_usuario(creds) -> dict:

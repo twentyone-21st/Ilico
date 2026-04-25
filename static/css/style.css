@@ -1327,6 +1327,13 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   animation: fadeIn 0.12s ease;
   overflow: hidden;
 }
+
+/* Evitar selección de texto al hacer long-press en móvil */
+.table-wrap tbody tr {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
 .ctx-menu.visible { display: block; }
 
 .ctx-item {

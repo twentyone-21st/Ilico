@@ -967,12 +967,44 @@ function mostrarToast(msg) {
  * @brief Registra los eventos necesarios para mostrar y cerrar el menú contextual.
  */
 function _iniciarMenuContextual() {
+  // Desktop: clic derecho
   document.addEventListener('contextmenu', e => {
     const fila = e.target.closest('tr[data-id]');
     if (!fila) return;
     e.preventDefault();
     _ctxCorreoId = fila.dataset.id;
     _mostrarCtxMenu(e.clientX, e.clientY);
+  });
+
+  // Móvil: long-press (500 ms)
+  let _lpTimer   = null;
+  let _lpMovedPx = 0;
+  let _lpStartX  = 0;
+  let _lpStartY  = 0;
+
+  document.addEventListener('touchstart', e => {
+    const fila = e.target.closest('tr[data-id]');
+    if (!fila) return;
+    const t = e.touches[0];
+    _lpStartX  = t.clientX;
+    _lpStartY  = t.clientY;
+    _lpMovedPx = 0;
+    _lpTimer = setTimeout(() => {
+      if (_lpMovedPx > 10) return;          // cancelar si el dedo se movió
+      _ctxCorreoId = fila.dataset.id;
+      _mostrarCtxMenu(t.clientX, t.clientY);
+      if (navigator.vibrate) navigator.vibrate(40); // háptico opcional
+    }, 500);
+  }, { passive: true });
+
+  document.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    _lpMovedPx = Math.hypot(t.clientX - _lpStartX, t.clientY - _lpStartY);
+    if (_lpMovedPx > 10 && _lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (_lpTimer) { clearTimeout(_lpTimer); _lpTimer = null; }
   });
 
   document.addEventListener('click',   () => _cerrarCtxMenu());

@@ -269,9 +269,10 @@ async function cambiarCategoria(categoria, btn) {
   document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
   if (secBandeja) secBandeja.classList.add('visible');
 
+  const movil   = window.innerWidth <= 768;
   const titulos = {
-    principal:  'Bandeja de entrada · Principal',
-    archivados: 'Bandeja de entrada · Archivados',
+    principal:  movil ? 'Principal'  : 'Bandeja de entrada · Principal',
+    archivados: movil ? 'Archivados' : 'Bandeja de entrada · Archivados',
     cuarentena: 'Cuarentena',
   };
   document.getElementById('topbar-title').textContent = titulos[categoria] || 'Bandeja de entrada';
@@ -1037,7 +1038,7 @@ function _iniciarMenuContextual() {
     if (!fila) return;
     e.preventDefault();
     _ctxCorreoId = fila.dataset.id;
-    _mostrarCtxMenu(e.clientX, e.clientY);
+    _mostrarCtxMenu(e.clientX, e.clientY, fila);
   });
 
   // Móvil: long-press (500 ms)
@@ -1056,7 +1057,7 @@ function _iniciarMenuContextual() {
     _lpTimer = setTimeout(() => {
       if (_lpMovedPx > 10) return;          // cancelar si el dedo se movió
       _ctxCorreoId = fila.dataset.id;
-      _mostrarCtxMenu(t.clientX, t.clientY);
+      _mostrarCtxMenu(t.clientX, t.clientY, fila);
       if (navigator.vibrate) navigator.vibrate(40); // háptico opcional
     }, 500);
   }, { passive: true });
@@ -1078,10 +1079,11 @@ function _iniciarMenuContextual() {
 
 /**
  * @brief Posiciona y muestra el menú contextual con las opciones de la categoría activa.
- * @param {number} x Posición horizontal del cursor.
- * @param {number} y Posición vertical del cursor.
+ * @param {number}      x         Posición horizontal del cursor (desktop).
+ * @param {number}      y         Posición vertical del cursor (desktop).
+ * @param {HTMLElement} anchorEl  Fila que disparó el menú; en móvil, el menú se ancla a ella.
  */
-function _mostrarCtxMenu(x, y) {
+function _mostrarCtxMenu(x, y, anchorEl) {
   const menu = document.getElementById('ctx-menu');
   if (!menu) return;
 
@@ -1117,14 +1119,25 @@ function _mostrarCtxMenu(x, y) {
          </div>`
   ).join('');
 
-  // Ajustar posición para que no salga de la ventana
-  menu.style.left = '-9999px';
-  menu.style.top  = '-9999px';
+  // Medir el menú fuera de la vista antes de posicionarlo
+  menu.style.cssText += ';left:-9999px;top:-9999px;right:auto;';
   menu.classList.add('visible');
   const mw = menu.offsetWidth;
   const mh = menu.offsetHeight;
-  menu.style.left = (x + mw > window.innerWidth  ? x - mw : x) + 'px';
-  menu.style.top  = (y + mh > window.innerHeight ? y - mh : y) + 'px';
+
+  if (anchorEl && window.innerWidth <= 768) {
+    // Móvil: fijo al borde derecho, centrado verticalmente con la fila
+    const rect = anchorEl.getBoundingClientRect();
+    const top  = rect.top + rect.height / 2 - mh / 2;
+    menu.style.right = '12px';
+    menu.style.left  = 'auto';
+    menu.style.top   = Math.max(60, Math.min(top, window.innerHeight - mh - 8)) + 'px';
+  } else {
+    // Desktop: aparece en el cursor, ajustado para no salir de la ventana
+    menu.style.right = 'auto';
+    menu.style.left  = (x + mw > window.innerWidth  ? x - mw : x) + 'px';
+    menu.style.top   = (y + mh > window.innerHeight ? y - mh : y) + 'px';
+  }
 }
 
 /**

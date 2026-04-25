@@ -791,8 +791,17 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 
   /* Topbar compacta */
   .topbar { padding: 12px 16px; gap: 8px; }
-  .topbar-title { font-size: 15px; }
+  .topbar-title {
+    font-size: 15px;
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
   #user-email { display: none; }
+  /* Ocultar el badge del usuario (solo punto) para dar espacio al título */
+  .user-badge { display: none; }
 
   /* Áreas de contenido */
   .main { padding: 12px; }
@@ -972,6 +981,10 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   font-size: 13px;
   color: var(--text-0);
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .correccion-input {

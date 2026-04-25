@@ -106,12 +106,19 @@ async function cargarDesdeCache() {
         mostrarHoraActualizacion();
         if (!d.stale) {
           iniciarAutoRefresh();
+          _precargarOtraCategoria();
           return;
         }
       }
     }
   } catch {}
   await cargarCorreos(false);
+  _precargarOtraCategoria();
+}
+
+function _precargarOtraCategoria() {
+  const otra = categoriaActiva === 'principal' ? 'archivados' : 'principal';
+  fetch('/api/correos?refresh=0&categoria=' + encodeURIComponent(otra)).catch(() => {});
 }
 
 /**
@@ -180,20 +187,30 @@ function iniciarAutoRefresh() {
       const r = await fetch('/api/correos/cache?categoria=' + encodeURIComponent(categoriaActiva));
       if (!r.ok) return;
       const d = await r.json();
+
+      const prevCargandoFondo = _cargandoFondo;
+      _cargandoFondo = !!d.loading;
+      const justFinishedLoading = prevCargandoFondo && !_cargandoFondo;
+
+      // Cuando el cache está vencido y no hay carga en curso, disparar recarga real en el backend
+      if (d.stale && !d.loading && !prevCargandoFondo) {
+        _cargandoFondo = true;
+        fetch('/api/correos?refresh=0&categoria=' + encodeURIComponent(categoriaActiva)).catch(() => {});
+      }
+
       if (!d.correos || !d.correos.length) return;
 
-      _cargandoFondo = !!d.loading;
-
-      if (d.correos && d.correos.length > 0) {
+      if (d.correos.length > 0) {
         const prevIds  = new Set(todosLosCorreos.map(c => c.id));
         const llegaron = d.correos.filter(c => !prevIds.has(c.id));
         todosLosCorreos = dedup(d.correos);
         actualizarBadge(categoriaActiva, d.stats);
         renderTabla(todosLosCorreos);
         mostrarHoraActualizacion();
-        if (llegaron.length > 0 && !_cargandoFondo)
+        // Suprimir el toast cuando la carga de fondo recién terminó (no son correos nuevos reales)
+        if (llegaron.length > 0 && !_cargandoFondo && !justFinishedLoading)
           mostrarToast(`📬 ${llegaron.length} correo${llegaron.length > 1 ? 's' : ''} nuevo${llegaron.length > 1 ? 's' : ''}.`);
-      } else if (d.vacio || (!d.loading && d.correos && d.correos.length === 0)) {
+      } else if (d.vacio && !d.loading) {
         todosLosCorreos = [];
         mostrarBandejaVacia();
       }
@@ -259,6 +276,7 @@ async function cambiarCategoria(categoria, btn) {
  * @param {HTMLElement} btn Botón de navegación presionado.
  */
 function mostrarSeccion(id, btn) {
+  detenerAutoRefresh();
   document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   document.querySelectorAll('.nav-categoria').forEach(b => b.classList.remove('active'));

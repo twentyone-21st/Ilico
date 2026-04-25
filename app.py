@@ -7,6 +7,7 @@ import json
 import logging
 import threading
 import time
+from datetime import timedelta
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 
@@ -25,6 +26,19 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "ilico-dev-2025")
+
+_en_produccion = bool(os.environ.get("RAILWAY_PUBLIC_DOMAIN"))
+app.config.update(
+    PERMANENT_SESSION_LIFETIME  = timedelta(days=30),
+    SESSION_COOKIE_HTTPONLY     = True,
+    SESSION_COOKIE_SAMESITE     = "Lax",
+    SESSION_COOKIE_SECURE       = _en_produccion,  # HTTPS solo en Railway
+)
+
+@app.before_request
+def _sesion_permanente():
+    """Marca cada sesión como permanente para que la cookie dure 30 días."""
+    session.permanent = True
 
 # Estado global del modelo de clasificación
 _MODELO   = None

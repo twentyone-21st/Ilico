@@ -11,6 +11,7 @@ from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 
 from classifier import entrenar_modelo, clasificar, MODEL_CACHE
+from security_service import analizar_lote
 from gmail_service import (
     crear_flujo_oauth, guardar_credenciales_desde_codigo,
     obtener_credenciales, listar_correos, obtener_perfil_usuario,
@@ -162,9 +163,9 @@ def _dedup(correos):
 
 def _clasificar_lote(correos_raw):
     """
-    @brief Aplica el clasificador a cada correo y devuelve la lista enriquecida con la predicción.
-    @param correos_raw Lista de dicts con id, asunto, remite y texto_clasificar.
-    @return Lista de dicts con clasificacion, confianza, prob_spam, prob_ham y razon añadidos.
+    @brief Clasifica cada correo y añade análisis de seguridad (SPF/DKIM/DMARC + URLs).
+    @param correos_raw Lista de dicts con id, asunto, remite, texto_clasificar, headers_auth, cuerpo, html_cuerpo.
+    @return Lista de dicts enriquecidos con clasificacion, confianza y seguridad.
     """
     resultado = []
     for c in correos_raw:
@@ -185,9 +186,23 @@ def _clasificar_lote(correos_raw):
                 "prob_ham":         clas["prob_ham"],
                 "ajustado":         clas["ajustado"],
                 "razon":            clas.get("razon", ""),
+                # Campos necesarios para el análisis de seguridad (se eliminan del resultado final)
+                "headers_auth":     c.get("headers_auth", {}),
+                "cuerpo":           c.get("cuerpo", ""),
+                "html_cuerpo":      c.get("html_cuerpo", ""),
             })
         except Exception as e:
             logger.debug(f"Error clasificando {c.get('id')}: {e}")
+
+    # Análisis de seguridad batch (una llamada a Safe Browsing por lote)
+    analizar_lote(resultado)
+
+    # Limpiar campos temporales del cache (html_cuerpo puede ser muy grande)
+    for c in resultado:
+        c.pop("headers_auth", None)
+        c.pop("cuerpo",       None)
+        c.pop("html_cuerpo",  None)
+
     return resultado
 
 

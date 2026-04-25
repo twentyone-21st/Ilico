@@ -480,6 +480,75 @@ function badgeInfo(clas) {
 }
 
 /**
+ * @brief Genera el badge de seguridad para mostrar en la celda de la tabla.
+ * @param {Object|undefined} seg Objeto seguridad del correo.
+ * @return {string} HTML del badge o cadena vacía.
+ */
+function _secBadgeTabla(seg) {
+  if (!seg) return '';
+  const cfg = {
+    peligro:     { icon: '🚨', label: 'Peligro' },
+    advertencia: { icon: '⚠️',  label: 'Advertencia' },
+    seguro:      { icon: '🛡️',  label: 'Seguro' },
+  };
+  const c = cfg[seg.nivel];
+  if (!c) return '';
+  return `<div class="sec-badge ${esc(seg.nivel)}">${c.icon} ${c.label}</div>`;
+}
+
+/**
+ * @brief Rellena la sección de seguridad del modal con los datos del correo.
+ * @param {Object|undefined} seg Objeto seguridad del correo.
+ */
+function _renderSecModal(seg) {
+  const sec = document.getElementById('modal-security');
+  if (!sec) return;
+
+  if (!seg) {
+    sec.style.display = 'none';
+    return;
+  }
+  sec.style.display = '';
+
+  const nivelCfg = {
+    peligro:     { icon: '🚨', texto: 'PELIGRO — Amenaza detectada' },
+    advertencia: { icon: '⚠️',  texto: 'ADVERTENCIA — Verificar remitente' },
+    seguro:      { icon: '🛡️',  texto: 'SEGURO — Sin amenazas detectadas' },
+  };
+  const cfg = nivelCfg[seg.nivel] || { icon: '❓', texto: 'Desconocido' };
+
+  document.getElementById('sec-nivel-icon').textContent  = cfg.icon;
+  const tEl = document.getElementById('sec-nivel-texto');
+  tEl.textContent  = cfg.texto;
+  tEl.className    = `modal-security-titulo ${seg.nivel || ''}`;
+
+  // Chips de autenticación SPF / DKIM / DMARC
+  const auth  = seg.auth || {};
+  const chips = document.getElementById('sec-auth-chips');
+  chips.innerHTML = ['SPF', 'DKIM', 'DMARC'].map(k => {
+    const val  = auth[k.toLowerCase()] || 'none';
+    const cls  = val === 'pass' ? 'ok' : val === 'none' ? 'warn' : 'fail';
+    const icon = val === 'pass' ? '✓' : val === 'none' ? '–' : '✗';
+    return `<span class="sec-chip ${cls}">${icon} ${k}</span>`;
+  }).join('');
+
+  // Amenazas de URL
+  const amenazasEl = document.getElementById('sec-amenazas');
+  if (seg.amenazas && seg.amenazas.length > 0) {
+    amenazasEl.style.display = '';
+    amenazasEl.innerHTML = seg.amenazas.map(a =>
+      `<div class="sec-amenaza-item">
+        <span class="sec-amenaza-tipo">${esc(a.tipo)}</span>
+        <span class="sec-amenaza-url">${esc(a.url)}</span>
+      </div>`
+    ).join('');
+  } else {
+    amenazasEl.style.display = 'none';
+    amenazasEl.innerHTML = '';
+  }
+}
+
+/**
  * @brief Escapa caracteres especiales HTML para evitar XSS al insertar texto en innerHTML.
  * @param {*} s Valor a escapar.
  * @return {string} Cadena con entidades HTML escapadas.
@@ -535,11 +604,12 @@ function renderTabla(correos) {
     const { badge } = badgeInfo(c.clasificacion);
     const niv       = calcularNivel(c.clasificacion, c.prob_ham, c.prob_spam);
     const dotNuevo = _correosLeidos.has(String(c.id)) ? '' : '<span class="dot-nuevo"></span>';
+    const secBadge  = _secBadgeTabla(c.seguridad);
     return `<tr data-id="${esc(c.id)}" onclick="abrirCorreo(this.dataset.id)">
       <td class="td-asunto" title="${esc(c.asunto)}">${dotNuevo}${esc(c.asunto)}</td>
       <td class="td-remite">${esc(c.remite)}</td>
       <td class="td-fecha">${esc(formatearFechaLocal(c.fecha))}</td>
-      <td>${badge}</td>
+      <td>${badge}${secBadge}</td>
       <td class="td-nivel">
         <div class="nivel-wrap">
           <div class="nivel-bar-wrap" data-tooltip="${esc(niv.tooltip)}">
@@ -788,6 +858,7 @@ async function abrirCorreo(id) {
   const { badge } = badgeInfo(cache.clasificacion);
   document.getElementById('modal-badge').innerHTML   = badge;
   document.getElementById('modal-razon').textContent = cache.razon || '';
+  _renderSecModal(cache.seguridad);
 
   try {
     const r = await fetch('/api/correo/' + encodeURIComponent(id));
@@ -803,6 +874,8 @@ async function abrirCorreo(id) {
       document.getElementById('modal-badge').innerHTML   = b;
       document.getElementById('modal-razon').textContent = d.razon || '';
     }
+    // Actualizar seguridad desde cache (el detail endpoint no devuelve seguridad)
+    if (cache.seguridad) _renderSecModal(cache.seguridad);
 
     const body = document.getElementById('modal-body');
     if (d.html_cuerpo && d.html_cuerpo.trim()) {

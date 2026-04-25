@@ -201,6 +201,14 @@ def _parsear_correo(servicio, mensaje_id: str):
         html_cuerpo = _extraer_html(msg["payload"])
         labels      = msg.get("labelIds", [])
 
+        _AUTH_HEADERS = (
+            "Authentication-Results",
+            "ARC-Authentication-Results",
+            "Received-SPF",
+            "DKIM-Signature",
+        )
+        headers_auth = {k: headers.get(k, "") for k in _AUTH_HEADERS}
+
         return {
             "id":               mensaje_id,
             "asunto":           asunto[:200],
@@ -211,6 +219,7 @@ def _parsear_correo(servicio, mensaje_id: str):
             "html_cuerpo":      html_cuerpo[:50000] if html_cuerpo else "",
             "texto_clasificar": f"{asunto} {cuerpo}",
             "labels":           labels,
+            "headers_auth":     headers_auth,
         }
     except Exception as e:
         logger.debug(f"Error _parsear_correo {mensaje_id}: {e}")

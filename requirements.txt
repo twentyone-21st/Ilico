@@ -1,4 +1,5 @@
 flask==3.0.3
+requests>=2.31.0
 gunicorn==22.0.0
 scikit-learn==1.5.1
 datasets==2.20.0

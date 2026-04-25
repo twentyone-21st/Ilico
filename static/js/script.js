@@ -522,16 +522,6 @@ function _renderSecModal(seg) {
   tEl.textContent  = cfg.texto;
   tEl.className    = `modal-security-titulo ${seg.nivel || ''}`;
 
-  // Chips de autenticación SPF / DKIM / DMARC
-  const auth  = seg.auth || {};
-  const chips = document.getElementById('sec-auth-chips');
-  chips.innerHTML = ['SPF', 'DKIM', 'DMARC'].map(k => {
-    const val  = auth[k.toLowerCase()] || 'none';
-    const cls  = val === 'pass' ? 'ok' : val === 'none' ? 'warn' : 'fail';
-    const icon = val === 'pass' ? '✓' : val === 'none' ? '–' : '✗';
-    return `<span class="sec-chip ${cls}">${icon} ${k}</span>`;
-  }).join('');
-
   // Amenazas de URL
   const amenazasEl = document.getElementById('sec-amenazas');
   if (seg.amenazas && seg.amenazas.length > 0) {
@@ -604,12 +594,11 @@ function renderTabla(correos) {
     const { badge } = badgeInfo(c.clasificacion);
     const niv       = calcularNivel(c.clasificacion, c.prob_ham, c.prob_spam);
     const dotNuevo = _correosLeidos.has(String(c.id)) ? '' : '<span class="dot-nuevo"></span>';
-    const secBadge  = _secBadgeTabla(c.seguridad);
     return `<tr data-id="${esc(c.id)}" onclick="abrirCorreo(this.dataset.id)">
       <td class="td-asunto" title="${esc(c.asunto)}">${dotNuevo}${esc(c.asunto)}</td>
       <td class="td-remite">${esc(c.remite)}</td>
       <td class="td-fecha">${esc(formatearFechaLocal(c.fecha))}</td>
-      <td>${badge}${secBadge}</td>
+      <td>${badge}</td>
       <td class="td-nivel">
         <div class="nivel-wrap">
           <div class="nivel-bar-wrap" data-tooltip="${esc(niv.tooltip)}">

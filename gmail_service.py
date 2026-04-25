@@ -28,35 +28,41 @@ SCOPES = [
     "https://www.googleapis.com/auth/gmail.modify",
 ]
 
-TOKEN_PATH       = Path(__file__).parent / "token.json"
 CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
 
-# Consultas Gmail para cada categoría de bandeja
 QUERY_POR_CATEGORIA = {
     "principal":  "label:INBOX",
     "archivados": "-label:INBOX -label:DRAFT -label:SENT -label:TRASH -label:SPAM",
 }
 
 
-def obtener_credenciales():
+def obtener_credenciales(token_dict: dict, on_refresh=None):
     """
-    @brief Carga el token OAuth desde disco y lo renueva automáticamente si está vencido.
-    @return Objeto Credentials válido, o None si no hay sesión activa.
+    @brief Crea un objeto Credentials desde un dict y lo renueva si está vencido.
+    @param token_dict  Dict con los datos del token (almacenado en la sesión de Flask).
+    @param on_refresh  Callback opcional invocado con el nuevo dict si el token se renovó.
+    @return Objeto Credentials válido, o None si el token es inválido.
     """
-    if not GOOGLE_AVAILABLE:
+    if not GOOGLE_AVAILABLE or not token_dict:
         return None
-    creds = None
-    if TOKEN_PATH.exists():
-        creds = Credentials.from_authorized_user_file(str(TOKEN_PATH), SCOPES)
-    if creds and creds.expired and creds.refresh_token:
-        try:
+    try:
+        creds = Credentials.from_authorized_user_info(token_dict, SCOPES)
+        if creds and creds.expired and creds.refresh_token:
             creds.refresh(Request())
-            _guardar_token(creds)
-        except Exception as e:
-            logger.error(f"Error refrescando token: {e}")
-            TOKEN_PATH.unlink(missing_ok=True)
-            return None
-    return creds if (creds and creds.valid) else None
+            if on_refresh:
+                on_refresh(json.loads(creds.to_json()))
+        return creds if (creds and creds.valid) else None
+    except Exception as e:
+        logger.error(f"Error cargando credenciales: {e}")
+        return None
+
+
+def credenciales_a_dict(creds) -> dict:
+    """
+    @brief Serializa un objeto Credentials a dict para guardarlo en la sesión de Flask.
+    @return Dict con los datos del token.
+    """
+    return json.loads(creds.to_json())
 
 
 def crear_flujo_oauth(redirect_uri: str):
@@ -77,62 +83,43 @@ def crear_flujo_oauth(redirect_uri: str):
     raise FileNotFoundError("No se encontraron credenciales de Google.")
 
 
-def guardar_credenciales_desde_codigo(codigo: str, redirect_uri: str):
+def guardar_credenciales_desde_codigo(codigo: str, redirect_uri: str) -> dict:
     """
-    @brief Intercambia el código de autorización por tokens y los persiste en disco.
+    @brief Intercambia el código de autorización por tokens y los devuelve como dict.
     @param codigo       Código OAuth recibido en el callback de Google.
     @param redirect_uri Misma URI usada al iniciar el flujo.
-    @return Objeto Credentials obtenido.
+    @return Dict con los datos del token para guardar en la sesión de Flask.
     """
     flujo = crear_flujo_oauth(redirect_uri)
     flujo.fetch_token(code=codigo)
-    _guardar_token(flujo.credentials)
-    return flujo.credentials
+    return json.loads(flujo.credentials.to_json())
 
 
-def _guardar_token(creds):
-    """
-    @brief Serializa y escribe el token OAuth en token.json para reutilizarlo en reinicios.
-    @param creds Credenciales a persistir.
-    """
-    with open(TOKEN_PATH, "w") as f:
-        f.write(creds.to_json())
-
-
-def esta_autenticado() -> bool:
-    """
-    @brief Verifica si existe un token OAuth válido para la sesión actual.
-    @return True si el usuario está autenticado con Gmail.
-    """
-    return obtener_credenciales() is not None
-
-
-def obtener_servicio():
+def obtener_servicio(creds):
     """
     @brief Construye el cliente autenticado de la Gmail API v1.
+    @param creds Objeto Credentials válido del usuario autenticado.
     @return Recurso de la Gmail API listo para usarse.
     """
-    creds = obtener_credenciales()
     if not creds:
         raise PermissionError("Usuario no autenticado con Gmail.")
     return build("gmail", "v1", credentials=creds)
 
 
-def listar_correos(max_resultados: int = 500, etiqueta: str = "INBOX",
+def listar_correos(creds, max_resultados: int = 500, etiqueta: str = "INBOX",
                    categoria: str = "principal") -> list:
     """
     @brief Obtiene y parsea correos de Gmail en paralelo, devueltos en orden cronológico inverso.
+    @param creds          Objeto Credentials del usuario autenticado.
     @param max_resultados Número máximo de correos a obtener.
     @param etiqueta       Parámetro heredado (no usado directamente; se usa 'categoria').
     @param categoria      'principal' o 'archivados'.
     @return Lista de dicts de correo ordenada del más reciente al más antiguo.
     """
     try:
-        servicio = obtener_servicio()
-        creds    = obtener_credenciales()
+        servicio = obtener_servicio(creds)
         query    = QUERY_POR_CATEGORIA.get(categoria, "label:INBOX")
 
-        # Paginación para obtener hasta max_resultados IDs de mensajes
         mensajes = []
         vistos   = set()
         page_token = None
@@ -167,7 +154,6 @@ def listar_correos(max_resultados: int = 500, etiqueta: str = "INBOX",
 
         correos = []
 
-        # Cada hilo usa sus propias credenciales para evitar problemas de concurrencia
         def _parsear_con_creds_propias(mensaje_id: str):
             svc = build("gmail", "v1", credentials=creds)
             return _parsear_correo(svc, mensaje_id)
@@ -185,7 +171,6 @@ def listar_correos(max_resultados: int = 500, etiqueta: str = "INBOX",
                 except Exception as e:
                     logger.debug(f"Error parseando {futuros[futuro]}: {e}")
 
-        # Ordenar del correo más reciente al más antiguo usando el timestamp numérico
         correos.sort(key=lambda c: c.get("fecha_ts", 0), reverse=True)
         return correos
 
@@ -310,27 +295,29 @@ def _formatear_fecha(fecha_str: str) -> str:
         return fecha_str[:20] if fecha_str else "—"
 
 
-def obtener_correo_por_id(mensaje_id: str):
+def obtener_correo_por_id(creds, mensaje_id: str):
     """
     @brief Obtiene un correo completo de Gmail dado su ID, incluyendo cuerpo HTML y texto.
+    @param creds      Objeto Credentials del usuario autenticado.
     @param mensaje_id ID del mensaje en Gmail.
     @return Dict con los campos del correo, o None si no se encuentra.
     """
     try:
-        servicio = obtener_servicio()
+        servicio = obtener_servicio(creds)
         return _parsear_correo(servicio, mensaje_id)
     except Exception as e:
         logger.error(f"Error obteniendo correo {mensaje_id}: {e}")
         return None
 
 
-def obtener_perfil_usuario() -> dict:
+def obtener_perfil_usuario(creds) -> dict:
     """
     @brief Obtiene el email y el total de mensajes del perfil Gmail del usuario autenticado.
+    @param creds Objeto Credentials del usuario autenticado.
     @return Dict con 'email' y 'total_correos'.
     """
     try:
-        servicio = obtener_servicio()
+        servicio = obtener_servicio(creds)
         perfil   = servicio.users().getProfile(userId="me").execute()
         return {
             "email":          perfil.get("emailAddress", ""),

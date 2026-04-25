@@ -8,12 +8,12 @@ import logging
 import threading
 import time
 from pathlib import Path
-from flask import Flask, render_template, request, jsonify, redirect, url_for
+from flask import Flask, render_template, request, jsonify, redirect, url_for, session
 
 from classifier import entrenar_modelo, clasificar, MODEL_CACHE
 from gmail_service import (
     crear_flujo_oauth, guardar_credenciales_desde_codigo,
-    esta_autenticado, listar_correos, obtener_perfil_usuario,
+    obtener_credenciales, listar_correos, obtener_perfil_usuario,
     obtener_correo_por_id,
 )
 
@@ -23,30 +23,14 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 app.secret_key = os.environ.get("SECRET_KEY", "ilico-dev-2025")
 
-# Marca el momento exacto en que este proceso arrancó
-_SERVER_START_TS = time.time()
-
-# Invalida automáticamente tokens de deploys anteriores al arrancar
-_TOKEN_PATH = Path(__file__).parent / "token.json"
-if _TOKEN_PATH.exists():
-    try:
-        if _TOKEN_PATH.stat().st_mtime < _SERVER_START_TS - 2:
-            _TOKEN_PATH.unlink()
-            logger.info("  [auth] Token anterior eliminado — el usuario deberá iniciar sesión.")
-    except Exception:
-        pass
-
 # Estado global del modelo de clasificación
 _MODELO   = None
 _ACCURACY = None
 _MODELO_LISTO = threading.Event()
 
-# Cache en memoria con dos categorías; evita llamar a Gmail en cada request
-_CACHE = {
-    "principal":  {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
-    "archivados": {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
-}
-_CACHE_LOCK   = threading.Lock()
+# Cache en memoria por usuario (clave: email del usuario); evita llamar a Gmail en cada request
+_CACHE      = {}
+_CACHE_LOCK = threading.RLock()
 _LIMITE       = 1000
 _TTL_SEGUNDOS = 5 * 60
 
@@ -57,6 +41,37 @@ _HAM_USR  = []
 _CORRECCIONES_FILE    = Path(__file__).parent / "correcciones_usuario.json"
 _FEEDBACK_FILE        = Path(__file__).parent / "feedback_correos.json"
 _FEEDBACK_LOCK        = threading.Lock()
+
+
+def _get_creds():
+    """
+    Obtiene credenciales válidas de la sesión del usuario actual.
+    Si el token está vencido lo renueva y guarda el nuevo en la sesión.
+    """
+    token_dict = session.get("token_data")
+    if not token_dict:
+        return None
+
+    def _save_refreshed(new_dict):
+        session["token_data"] = new_dict
+
+    return obtener_credenciales(token_dict, on_refresh=_save_refreshed)
+
+
+def _get_user_id() -> str:
+    """Devuelve el email del usuario de la sesión, usado como clave de cache."""
+    return session.get("user_email", "")
+
+
+def _get_user_cache(user_id: str) -> dict:
+    """Devuelve el bucket de cache del usuario, creándolo si no existe."""
+    with _CACHE_LOCK:
+        if user_id not in _CACHE:
+            _CACHE[user_id] = {
+                "principal":  {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
+                "archivados": {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
+            }
+        return _CACHE[user_id]
 
 
 def _cargar_correcciones():
@@ -173,22 +188,24 @@ def _clasificar_lote(correos_raw):
     return resultado
 
 
-def _cargar_categoria(categoria: str, cantidad: int, reemplazar: bool):
+def _cargar_categoria(creds, user_id: str, categoria: str, cantidad: int, reemplazar: bool):
     """
-    @brief Descarga correos de Gmail, los clasifica y actualiza el cache de la categoría indicada.
+    @brief Descarga correos de Gmail, los clasifica y actualiza el cache del usuario indicado.
+    @param creds      Credenciales OAuth del usuario (capturadas antes de lanzar el hilo).
+    @param user_id    Email del usuario, clave del cache.
     @param categoria  'principal' o 'archivados'.
     @param cantidad   Número máximo de correos a obtener.
     @param reemplazar Si True reemplaza el cache completo; si False fusiona con los existentes.
     """
+    user_cache = _get_user_cache(user_id)
     try:
-        correos_raw = listar_correos(max_resultados=cantidad, categoria=categoria)
+        correos_raw  = listar_correos(creds, max_resultados=cantidad, categoria=categoria)
         clasificados = _clasificar_lote(correos_raw)
         with _CACHE_LOCK:
-            bucket = _CACHE[categoria]
+            bucket = user_cache[categoria]
             if reemplazar:
                 nuevo = _dedup(clasificados)
             else:
-                # Fusión: antepone los nuevos para no perder los ya clasificados
                 ids_previos = {str(c.get("id")) for c in bucket["correos"]}
                 nuevos = [c for c in clasificados if str(c.get("id")) not in ids_previos]
                 nuevo  = _dedup(nuevos + bucket["correos"])
@@ -201,16 +218,17 @@ def _cargar_categoria(categoria: str, cantidad: int, reemplazar: bool):
         logger.error(f"Error cargando {categoria}: {e}")
     finally:
         with _CACHE_LOCK:
-            _CACHE[categoria]["cargando"] = False
+            user_cache[categoria]["cargando"] = False
 
 
-def _cache_vencido(categoria):
+def _cache_vencido(user_cache, categoria):
     """
     @brief Indica si el cache de una categoría superó el TTL de 5 minutos.
-    @param categoria Clave del bucket de cache.
+    @param user_cache Bucket de cache del usuario.
+    @param categoria  Clave del bucket de cache.
     @return True si el cache está vencido y debe recargarse.
     """
-    return (time.time() - _CACHE[categoria]["ts"]) > _TTL_SEGUNDOS
+    return (time.time() - user_cache[categoria]["ts"]) > _TTL_SEGUNDOS
 
 
 def _arrancar_modelo():
@@ -249,7 +267,8 @@ def index():
     """
     @brief Renderiza la interfaz principal e informa al template si el usuario está autenticado.
     """
-    return render_template("index.html", autenticado=esta_autenticado())
+    autenticado = bool(session.get("token_data"))
+    return render_template("index.html", autenticado=autenticado)
 
 
 @app.route("/auth/gmail")
@@ -270,7 +289,7 @@ def auth_gmail():
 @app.route("/auth/callback")
 def auth_callback():
     """
-    @brief Recibe el código OAuth de Google, lo intercambia por un token y redirige al inicio.
+    @brief Recibe el código OAuth de Google, intercambia por token y lo guarda en la sesión del usuario.
     """
     codigo = request.args.get("code")
     if not codigo:
@@ -278,7 +297,13 @@ def auth_callback():
     try:
         railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
         uri = f"https://{railway}/auth/callback" if railway else url_for("auth_callback", _external=True)
-        guardar_credenciales_desde_codigo(codigo, uri)
+        token_dict = guardar_credenciales_desde_codigo(codigo, uri)
+        session["token_data"] = token_dict
+        # Guardar email en sesión para usarlo como clave de cache
+        creds = obtener_credenciales(token_dict)
+        if creds:
+            perfil = obtener_perfil_usuario(creds)
+            session["user_email"] = perfil.get("email", "")
     except Exception as e:
         logger.error(f"Error callback OAuth: {e}")
     return redirect(url_for("index"))
@@ -287,15 +312,13 @@ def auth_callback():
 @app.route("/auth/logout")
 def logout():
     """
-    @brief Elimina el token de Gmail y limpia el cache en memoria, cerrando la sesión del usuario.
+    @brief Limpia la sesión del usuario y elimina su cache en memoria.
     """
-    token = Path(__file__).parent / "token.json"
-    token.unlink(missing_ok=True)
-    with _CACHE_LOCK:
-        for cat in _CACHE:
-            _CACHE[cat]["correos"] = []
-            _CACHE[cat]["stats"]   = {}
-            _CACHE[cat]["ts"]      = 0.0
+    user_id = session.get("user_email")
+    session.clear()
+    if user_id:
+        with _CACHE_LOCK:
+            _CACHE.pop(user_id, None)
     return redirect(url_for("index"))
 
 
@@ -304,9 +327,10 @@ def api_perfil():
     """
     @brief Devuelve el email y total de mensajes del usuario autenticado en Gmail.
     """
-    if not esta_autenticado():
+    creds = _get_creds()
+    if not creds:
         return jsonify({"autenticado": False})
-    perfil = obtener_perfil_usuario()
+    perfil = obtener_perfil_usuario(creds)
     perfil["autenticado"] = True
     return jsonify(perfil)
 
@@ -317,7 +341,12 @@ def api_correos():
     @brief Devuelve los correos clasificados del cache; lanza carga en fondo si el cache está vacío o vencido.
     @return JSON con correos, stats, loading y desde_cache.
     """
-    if not esta_autenticado():
+    creds = _get_creds()
+    if not creds:
+        return jsonify({"error": "No autenticado"}), 401
+
+    user_id = _get_user_id()
+    if not user_id:
         return jsonify({"error": "No autenticado"}), 401
 
     modelo = _esperar_modelo(timeout=90)
@@ -325,48 +354,50 @@ def api_correos():
         return jsonify({"error": "Modelo no disponible", "correos": [], "stats": {}, "loading": True, "nuevos": 0}), 503
 
     cat    = request.args.get("categoria", "principal")
-    if cat not in _CACHE:
+    if cat not in ("principal", "archivados"):
         cat = "principal"
     forzar = request.args.get("refresh", "0") == "1"
 
+    user_cache = _get_user_cache(user_id)
+
     with _CACHE_LOCK:
-        tiene_cache = bool(_CACHE[cat]["correos"])
-        vencido     = _cache_vencido(cat)
-        cargando    = _CACHE[cat]["cargando"]
+        tiene_cache = bool(user_cache[cat]["correos"])
+        vencido     = _cache_vencido(user_cache, cat)
+        cargando    = user_cache[cat]["cargando"]
 
     # Carga inicial: 30 correos rápidos en primer plano, luego ampliación a _LIMITE en background
     if not tiene_cache or forzar:
         if not cargando:
             with _CACHE_LOCK:
-                _CACHE[cat]["cargando"] = True
-            _cargar_categoria(cat, cantidad=30, reemplazar=False)
+                user_cache[cat]["cargando"] = True
+            _cargar_categoria(creds, user_id, cat, cantidad=30, reemplazar=False)
             with _CACHE_LOCK:
-                hay_resultados = bool(_CACHE[cat]["correos"])
+                hay_resultados = bool(user_cache[cat]["correos"])
             if hay_resultados:
                 threading.Thread(
                     target=_cargar_categoria,
-                    args=(cat, _LIMITE, True),
+                    args=(creds, user_id, cat, _LIMITE, True),
                     daemon=True
                 ).start()
                 with _CACHE_LOCK:
-                    _CACHE[cat]["cargando"] = True
+                    user_cache[cat]["cargando"] = True
             else:
                 with _CACHE_LOCK:
-                    _CACHE[cat]["cargando"] = False
+                    user_cache[cat]["cargando"] = False
 
     elif vencido and not cargando:
         with _CACHE_LOCK:
-            _CACHE[cat]["cargando"] = True
+            user_cache[cat]["cargando"] = True
         threading.Thread(
             target=_cargar_categoria,
-            args=(cat, _LIMITE, True),
+            args=(creds, user_id, cat, _LIMITE, True),
             daemon=True
         ).start()
 
     with _CACHE_LOCK:
-        correos  = list(_CACHE[cat]["correos"])
-        stats    = dict(_CACHE[cat]["stats"])
-        cargando = _CACHE[cat]["cargando"]
+        correos  = list(user_cache[cat]["correos"])
+        stats    = dict(user_cache[cat]["stats"])
+        cargando = user_cache[cat]["cargando"]
 
     return jsonify({
         "correos":     correos,
@@ -382,14 +413,21 @@ def api_correos_cache():
     """
     @brief Devuelve el estado actual del cache sin disparar cargas; usado por el polling del frontend cada 5 s.
     """
+    user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"correos": [], "stats": {}, "desde_cache": True, "nuevos": 0,
+                        "stale": False, "loading": False, "vacio": True})
+
     cat = request.args.get("categoria", "principal")
-    if cat not in _CACHE:
+    if cat not in ("principal", "archivados"):
         cat = "principal"
+
+    user_cache = _get_user_cache(user_id)
     with _CACHE_LOCK:
-        correos  = list(_CACHE[cat]["correos"])
-        stats    = dict(_CACHE[cat]["stats"])
-        vencido  = _cache_vencido(cat)
-        cargando = _CACHE[cat]["cargando"]
+        correos  = list(user_cache[cat]["correos"])
+        stats    = dict(user_cache[cat]["stats"])
+        vencido  = _cache_vencido(user_cache, cat)
+        cargando = user_cache[cat]["cargando"]
     return jsonify({
         "correos":     correos,
         "stats":       stats,
@@ -407,21 +445,25 @@ def api_correo_detalle(mensaje_id):
     @brief Devuelve el contenido completo de un correo, fusionando la clasificación del cache si existe.
     @param mensaje_id ID del mensaje en Gmail.
     """
-    if not esta_autenticado():
+    creds = _get_creds()
+    if not creds:
         return jsonify({"error": "No autenticado"}), 401
 
+    user_id   = _get_user_id()
     cache_row = None
-    with _CACHE_LOCK:
-        for cat in _CACHE:
-            for c in _CACHE[cat]["correos"]:
-                if c.get("id") == mensaje_id:
-                    cache_row = c
+    if user_id:
+        user_cache = _get_user_cache(user_id)
+        with _CACHE_LOCK:
+            for cat in user_cache:
+                for c in user_cache[cat]["correos"]:
+                    if c.get("id") == mensaje_id:
+                        cache_row = c
+                        break
+                if cache_row:
                     break
-            if cache_row:
-                break
 
     try:
-        completo = obtener_correo_por_id(mensaje_id)
+        completo = obtener_correo_por_id(creds, mensaje_id)
         if not completo:
             return jsonify({"error": "No encontrado"}), 404
         if cache_row:
@@ -598,21 +640,9 @@ def api_reentrenar():
 @app.route("/api/webhook/gmail", methods=["POST"])
 def webhook_gmail():
     """
-    @brief Recibe notificaciones push de Gmail y dispara una recarga del cache en background.
+    @brief Recibe notificaciones push de Gmail. Sin contexto de usuario en webhooks,
+           el cache se actualizará en el próximo TTL de cada usuario.
     """
-    envelope = request.get_json(silent=True)
-    if not envelope or "message" not in envelope:
-        return "OK", 200
-    def _refrescar():
-        for cat in ("principal", "archivados"):
-            if esta_autenticado() and _MODELO is not None:
-                with _CACHE_LOCK:
-                    if not _CACHE[cat]["cargando"]:
-                        _CACHE[cat]["cargando"] = True
-                    else:
-                        continue
-                _cargar_categoria(cat, cantidad=_LIMITE, reemplazar=True)
-    threading.Thread(target=_refrescar, daemon=True).start()
     return "OK", 200
 
 

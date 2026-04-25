@@ -1,3 +1,35 @@
+/* == FUENTES LOCALES: Inter == */
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter_18pt-Light.ttf') format('truetype');
+  font-weight: 300; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter_18pt-Regular.ttf') format('truetype');
+  font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter_18pt-Medium.ttf') format('truetype');
+  font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter_18pt-SemiBold.ttf') format('truetype');
+  font-weight: 600; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter_18pt-Bold.ttf') format('truetype');
+  font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+  font-family: 'Inter';
+  src: url('../fonts/Inter_18pt-ExtraBold.ttf') format('truetype');
+  font-weight: 800; font-style: normal; font-display: swap;
+}
+
 /* == VARIABLES CSS == */
 :root {
   --bg-0:       #090c12;
@@ -24,9 +56,9 @@
   --seguro:       #1A7A3F;
   --accent:     #4a6cf7;
   --accent-dim: rgba(74,108,247,0.15);
-  --font-display: 'Syne', sans-serif;
-  --font-body:    'Manrope', sans-serif;
-  --font-mono:    'DM Mono', monospace;
+  --font-display: 'Inter', sans-serif;
+  --font-body:    'Inter', sans-serif;
+  --font-mono:    'Inter', sans-serif;
   --radius:     12px;
   --radius-lg:  20px;
 }

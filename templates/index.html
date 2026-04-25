@@ -15,6 +15,9 @@
 <!-- APP SHELL: contenedor raíz que engloba sidebar y área de contenido -->
 <div class="app-shell">
 
+  <!-- Fondo oscuro que aparece cuando el sidebar está abierto en móvil -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
   <!-- SIDEBAR: navegación lateral con categorías de bandeja y herramientas -->
   <aside class="sidebar">
     <div class="logo">
@@ -53,10 +56,13 @@
   <!-- /SIDEBAR -->
 
   <!-- LAYOUT PRINCIPAL: columna flex que contiene topbar y contenido desplazable -->
-  <div style="display:flex;flex-direction:column;min-height:100vh;margin-left:260px;width:calc(100% - 260px);">
+  <div class="content-main">
 
     <!-- TOPBAR: título de sección activa y badge del usuario autenticado -->
     <header class="topbar">
+      <button class="btn-hamburger" id="btn-hamburger" onclick="toggleSidebar()" aria-label="Abrir menú">
+        <span></span><span></span><span></span>
+      </button>
       <div class="topbar-title" id="topbar-title">Bandeja de entrada</div>
       <div class="topbar-right">
         <div class="user-badge" id="user-badge">

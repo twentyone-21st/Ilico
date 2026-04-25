@@ -25,6 +25,29 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /**
+ * @brief Abre o cierra el sidebar en móvil, mostrando u ocultando el overlay.
+ */
+function toggleSidebar() {
+  const sidebar  = document.querySelector('.sidebar');
+  const overlay  = document.getElementById('sidebar-overlay');
+  const isOpen   = sidebar.classList.toggle('sidebar-open');
+  if (overlay) overlay.classList.toggle('visible', isOpen);
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
+/**
+ * @brief Cierra el sidebar móvil si está abierto (al navegar o tocar fuera).
+ */
+function _cerrarSidebar() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar || !sidebar.classList.contains('sidebar-open')) return;
+  sidebar.classList.remove('sidebar-open');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (overlay) overlay.classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+/**
  * @brief Enlaza el botón de cierre de sesión para limpiar estado local antes de redirigir.
  */
 function prepararLogout() {
@@ -228,6 +251,7 @@ function iniciarAutoRefresh() {
  * @param {HTMLElement} btn  Botón de navegación presionado, para marcarlo como activo.
  */
 async function cambiarCategoria(categoria, btn) {
+  _cerrarSidebar();
   detenerAutoRefresh();
   todosLosCorreos = [];
   _mapaCorreos    = {};
@@ -284,6 +308,7 @@ async function cambiarCategoria(categoria, btn) {
  * @param {HTMLElement} btn Botón de navegación presionado.
  */
 function mostrarSeccion(id, btn) {
+  _cerrarSidebar();
   detenerAutoRefresh();
   document.querySelectorAll('.section').forEach(s => s.classList.remove('visible'));
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
@@ -513,7 +538,7 @@ function renderTabla(correos) {
       <td class="td-remite">${esc(c.remite)}</td>
       <td class="td-fecha">${esc(formatearFechaLocal(c.fecha))}</td>
       <td>${badge}</td>
-      <td>
+      <td class="td-nivel">
         <div class="nivel-wrap">
           <div class="nivel-bar-wrap" data-tooltip="${esc(niv.tooltip)}">
             <div class="nivel-bar">
@@ -528,7 +553,11 @@ function renderTabla(correos) {
 
   tc.innerHTML = `<table>
     <thead><tr>
-      <th>Asunto</th><th>Remitente</th><th>Fecha</th><th>Clasificación</th><th>Nivel de Confianza</th>
+      <th>Asunto</th>
+      <th class="th-remite">Remitente</th>
+      <th class="th-fecha">Fecha</th>
+      <th>Clasificación</th>
+      <th class="th-nivel">Nivel de Confianza</th>
     </tr></thead>
     <tbody>${filas}</tbody>
   </table>`;

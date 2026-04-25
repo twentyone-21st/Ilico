@@ -51,9 +51,10 @@ _CACHE_LOCK = threading.RLock()
 _LIMITE       = 1000
 _TTL_SEGUNDOS = 5 * 60
 
-# Palabras enseñadas por el usuario para ajustar el clasificador en tiempo real
-_SPAM_USR = []
-_HAM_USR  = []
+# Palabras enseñadas por usuario — { "user@gmail.com": {"spam": [...], "ham": [...]} }
+# Persistentes en disco y sincronizadas en todos los dispositivos del usuario.
+_CORRECCIONES: dict      = {}
+_CORRECCIONES_LOCK       = threading.Lock()
 
 # Directorio de datos persistentes.
 # En Railway: monta un Volumen en /data y añade DATA_DIR=/data a las variables de entorno.
@@ -64,7 +65,7 @@ _DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 _CORRECCIONES_FILE = _DATA_DIR / "correcciones_usuario.json"
 _FEEDBACK_FILE     = _DATA_DIR / "feedback_correos.json"
-_FEEDBACK_LOCK        = threading.Lock()
+_FEEDBACK_LOCK     = threading.Lock()
 
 
 def _get_creds():
@@ -99,27 +100,49 @@ def _get_user_cache(user_id: str) -> dict:
         return _CACHE[user_id]
 
 
+def _get_correcciones_usuario(user_id: str) -> tuple:
+    """
+    @brief Devuelve copias de (spam_list, ham_list) para el usuario dado.
+    @return Tupla (spam, ham) con listas independientes (seguro para hilos).
+    """
+    with _CORRECCIONES_LOCK:
+        data = _CORRECCIONES.get(user_id, {})
+        return list(data.get("spam", [])), list(data.get("ham", []))
+
+
 def _cargar_correcciones():
     """
-    @brief Carga las palabras de corrección del usuario desde disco al arrancar el servidor.
+    @brief Carga desde disco el dict de correcciones por usuario al arrancar el servidor.
+    Soporta el nuevo formato { "email": {"spam": [...], "ham": [...]} }.
     """
-    global _SPAM_USR, _HAM_USR
-    if _CORRECCIONES_FILE.exists():
-        try:
-            d = json.loads(_CORRECCIONES_FILE.read_text(encoding="utf-8"))
-            _SPAM_USR = d.get("spam", [])
-            _HAM_USR  = d.get("ham",  [])
-        except Exception:
-            pass
+    global _CORRECCIONES
+    if not _CORRECCIONES_FILE.exists():
+        return
+    try:
+        d = json.loads(_CORRECCIONES_FILE.read_text(encoding="utf-8"))
+        if isinstance(d, dict):
+            # Validar que los valores son dicts (nuevo formato por-usuario)
+            if all(isinstance(v, dict) for v in d.values()):
+                with _CORRECCIONES_LOCK:
+                    _CORRECCIONES = d
+            # Si es el viejo formato plano {"spam":[], "ham":[]}, lo descartamos —
+            # no podemos saber a qué usuario pertenecía.
+    except Exception as e:
+        logger.warning(f"No se cargaron correcciones: {e}")
 
 
 def _guardar_correcciones():
     """
-    @brief Persiste las listas de corrección en JSON para que sobrevivan reinicios del servidor.
+    @brief Persiste el dict de correcciones por usuario en JSON para sobrevivir reinicios.
     """
+    with _CORRECCIONES_LOCK:
+        snapshot = {
+            uid: {"spam": list(d.get("spam", [])), "ham": list(d.get("ham", []))}
+            for uid, d in _CORRECCIONES.items()
+        }
     try:
         _CORRECCIONES_FILE.write_text(
-            json.dumps({"spam": _SPAM_USR, "ham": _HAM_USR}, ensure_ascii=False, indent=2),
+            json.dumps(snapshot, ensure_ascii=False, indent=2),
             encoding="utf-8"
         )
     except Exception as e:
@@ -182,17 +205,19 @@ def _dedup(correos):
     return resultado
 
 
-def _clasificar_lote(correos_raw):
+def _clasificar_lote(correos_raw, spam_usr: list, ham_usr: list):
     """
     @brief Clasifica cada correo y añade análisis de seguridad (SPF/DKIM/DMARC + URLs).
     @param correos_raw Lista de dicts con id, asunto, remite, texto_clasificar, headers_auth, cuerpo, html_cuerpo.
+    @param spam_usr    Palabras SPAM del usuario (para ajuste en tiempo real).
+    @param ham_usr     Palabras HAM del usuario (para ajuste en tiempo real).
     @return Lista de dicts enriquecidos con clasificacion, confianza y seguridad.
     """
     resultado = []
     for c in correos_raw:
         try:
             clas = clasificar(
-                c["texto_clasificar"], _MODELO, _SPAM_USR, _HAM_USR,
+                c["texto_clasificar"], _MODELO, spam_usr, ham_usr,
                 remitente=c.get("remite", "")
             )
             resultado.append({
@@ -232,14 +257,15 @@ def _cargar_categoria(creds, user_id: str, categoria: str, cantidad: int, reempl
     @brief Descarga correos de Gmail, los clasifica y actualiza el cache del usuario indicado.
     @param creds      Credenciales OAuth del usuario (capturadas antes de lanzar el hilo).
     @param user_id    Email del usuario, clave del cache.
-    @param categoria  'principal' o 'archivados'.
+    @param categoria  'principal', 'archivados' o 'cuarentena'.
     @param cantidad   Número máximo de correos a obtener.
     @param reemplazar Si True reemplaza el cache completo; si False fusiona con los existentes.
     """
     user_cache = _get_user_cache(user_id)
+    spam_usr, ham_usr = _get_correcciones_usuario(user_id)
     try:
         correos_raw  = listar_correos(creds, max_resultados=cantidad, categoria=categoria)
-        clasificados = _clasificar_lote(correos_raw)
+        clasificados = _clasificar_lote(correos_raw, spam_usr, ham_usr)
         with _CACHE_LOCK:
             bucket = user_cache[categoria]
             if reemplazar:
@@ -338,7 +364,7 @@ def auth_callback():
         uri = f"https://{railway}/auth/callback" if railway else url_for("auth_callback", _external=True)
         token_dict = guardar_credenciales_desde_codigo(codigo, uri)
         session["token_data"] = token_dict
-        # Guardar email en sesión para usarlo como clave de cache
+        # Guardar email en sesión para usarlo como clave de cache y correcciones
         creds = obtener_credenciales(token_dict)
         if creds:
             perfil = obtener_perfil_usuario(creds)
@@ -530,7 +556,9 @@ def api_clasificar():
     modelo = _esperar_modelo(timeout=90)
     if modelo is None:
         return jsonify({"error": "Modelo no disponible"}), 503
-    resultado = clasificar(texto, modelo, _SPAM_USR, _HAM_USR,
+    user_id = _get_user_id()
+    spam_usr, ham_usr = _get_correcciones_usuario(user_id)
+    resultado = clasificar(texto, modelo, spam_usr, ham_usr,
                            remitente=data.get("remitente", ""))
     return jsonify(resultado)
 
@@ -540,7 +568,10 @@ def api_feedback():
     """
     @brief Añade palabras clave a la lista de corrección del usuario y guarda el correo como ejemplo de entrenamiento.
     """
-    global _SPAM_USR, _HAM_USR
+    user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"error": "No autenticado"}), 401
+
     data = request.get_json(silent=True) or {}
     tipo = data.get("tipo", "").lower()
     if tipo not in ("spam", "ham"):
@@ -556,12 +587,17 @@ def api_feedback():
     if not palabras:
         return jsonify({"error": "Sin palabras válidas"}), 400
 
-    lista    = _SPAM_USR if tipo == "spam" else _HAM_USR
-    añadidas = 0
-    for p in palabras:
-        if p not in lista:
-            lista.append(p)
-            añadidas += 1
+    with _CORRECCIONES_LOCK:
+        if user_id not in _CORRECCIONES:
+            _CORRECCIONES[user_id] = {"spam": [], "ham": []}
+        lista = _CORRECCIONES[user_id][tipo]
+        añadidas = 0
+        for p in palabras:
+            if p not in lista:
+                lista.append(p)
+                añadidas += 1
+        total_spam = len(_CORRECCIONES[user_id]["spam"])
+        total_ham  = len(_CORRECCIONES[user_id]["ham"])
 
     _guardar_correcciones()
 
@@ -577,55 +613,81 @@ def api_feedback():
     return jsonify({
         "ok":         True,
         "mensaje":    f"{añadidas} palabra(s) añadida(s) como {tipo.upper()}.",
-        "total_spam": len(_SPAM_USR),
-        "total_ham":  len(_HAM_USR),
+        "total_spam": total_spam,
+        "total_ham":  total_ham,
     })
 
 
 @app.route("/api/correcciones")
 def api_correcciones():
     """
-    @brief Devuelve las listas actuales de palabras de corrección registradas por el usuario.
+    @brief Devuelve las listas actuales de palabras de corrección del usuario autenticado.
     """
-    return jsonify({"spam": _SPAM_USR, "ham": _HAM_USR})
+    user_id = _get_user_id()
+    spam_usr, ham_usr = _get_correcciones_usuario(user_id)
+    return jsonify({"spam": spam_usr, "ham": ham_usr})
 
 
 @app.route("/api/correcciones/sincronizar", methods=["POST"])
 def api_sincronizar_correcciones():
     """
-    @brief Fusiona las correcciones guardadas en localStorage del cliente con las del servidor.
+    @brief Fusiona las correcciones del localStorage del cliente con las del servidor (por usuario).
+    Solo mezcla — nunca borra lo que ya existe en el servidor.
     """
-    global _SPAM_USR, _HAM_USR
+    user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"ok": False, "error": "No autenticado"}), 401
+
     data = request.get_json(silent=True) or {}
     spam_new = [str(p).lower().strip() for p in data.get("spam", []) if len(str(p).strip()) > 2]
     ham_new  = [str(p).lower().strip() for p in data.get("ham",  []) if len(str(p).strip()) > 2]
-    for p in spam_new:
-        if p not in _SPAM_USR:
-            _SPAM_USR.append(p)
-    for p in ham_new:
-        if p not in _HAM_USR:
-            _HAM_USR.append(p)
+
+    if not spam_new and not ham_new:
+        spam_usr, ham_usr = _get_correcciones_usuario(user_id)
+        return jsonify({"ok": True, "total_spam": len(spam_usr), "total_ham": len(ham_usr)})
+
+    with _CORRECCIONES_LOCK:
+        if user_id not in _CORRECCIONES:
+            _CORRECCIONES[user_id] = {"spam": [], "ham": []}
+        for p in spam_new:
+            if p not in _CORRECCIONES[user_id]["spam"]:
+                _CORRECCIONES[user_id]["spam"].append(p)
+        for p in ham_new:
+            if p not in _CORRECCIONES[user_id]["ham"]:
+                _CORRECCIONES[user_id]["ham"].append(p)
+        total_spam = len(_CORRECCIONES[user_id]["spam"])
+        total_ham  = len(_CORRECCIONES[user_id]["ham"])
+
     _guardar_correcciones()
-    return jsonify({"ok": True, "total_spam": len(_SPAM_USR), "total_ham": len(_HAM_USR)})
+    return jsonify({"ok": True, "total_spam": total_spam, "total_ham": total_ham})
 
 
 @app.route("/api/correcciones/eliminar", methods=["POST"])
 def api_eliminar_correccion():
     """
-    @brief Elimina una palabra específica de la lista de correcciones spam o ham del usuario.
+    @brief Elimina una palabra específica de la lista de correcciones del usuario.
     """
-    global _SPAM_USR, _HAM_USR
+    user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"error": "No autenticado"}), 401
+
     data    = request.get_json(silent=True) or {}
     palabra = data.get("palabra", "").lower().strip()
     tipo    = data.get("tipo", "").lower()
     if not palabra or tipo not in ("spam", "ham"):
         return jsonify({"error": "Datos inválidos"}), 400
-    lista = _SPAM_USR if tipo == "spam" else _HAM_USR
-    if palabra in lista:
+
+    with _CORRECCIONES_LOCK:
+        lista = _CORRECCIONES.get(user_id, {}).get(tipo, [])
+        if palabra not in lista:
+            return jsonify({"ok": False, "mensaje": f"'{palabra}' no encontrada."}), 404
         lista.remove(palabra)
-        _guardar_correcciones()
-        return jsonify({"ok": True, "mensaje": f"'{palabra}' eliminada.", "total_spam": len(_SPAM_USR), "total_ham": len(_HAM_USR)})
-    return jsonify({"ok": False, "mensaje": f"'{palabra}' no encontrada."}), 404
+        total_spam = len(_CORRECCIONES[user_id]["spam"])
+        total_ham  = len(_CORRECCIONES[user_id]["ham"])
+
+    _guardar_correcciones()
+    return jsonify({"ok": True, "mensaje": f"'{palabra}' eliminada.",
+                    "total_spam": total_spam, "total_ham": total_ham})
 
 
 @app.route("/api/correcciones/editar", methods=["POST"])
@@ -633,21 +695,30 @@ def api_editar_correccion():
     """
     @brief Reemplaza una palabra de corrección existente por una nueva dentro de la misma categoría.
     """
-    global _SPAM_USR, _HAM_USR
+    user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"error": "No autenticado"}), 401
+
     data   = request.get_json(silent=True) or {}
     ant    = data.get("palabra_anterior", "").lower().strip()
     nueva  = data.get("palabra_nueva", "").lower().strip()
     tipo   = data.get("tipo", "").lower()
     if not ant or not nueva or tipo not in ("spam", "ham"):
         return jsonify({"error": "Datos inválidos"}), 400
-    lista = _SPAM_USR if tipo == "spam" else _HAM_USR
-    if ant not in lista:
-        return jsonify({"error": f"'{ant}' no encontrada."}), 404
-    if nueva in lista:
-        return jsonify({"ok": False, "mensaje": f"'{nueva}' ya existe."}), 400
-    lista[lista.index(ant)] = nueva
+
+    with _CORRECCIONES_LOCK:
+        lista = _CORRECCIONES.get(user_id, {}).get(tipo, [])
+        if ant not in lista:
+            return jsonify({"error": f"'{ant}' no encontrada."}), 404
+        if nueva in lista:
+            return jsonify({"ok": False, "mensaje": f"'{nueva}' ya existe."}), 400
+        lista[lista.index(ant)] = nueva
+        total_spam = len(_CORRECCIONES[user_id]["spam"])
+        total_ham  = len(_CORRECCIONES[user_id]["ham"])
+
     _guardar_correcciones()
-    return jsonify({"ok": True, "mensaje": f"'{ant}' → '{nueva}' actualizada.", "total_spam": len(_SPAM_USR), "total_ham": len(_HAM_USR)})
+    return jsonify({"ok": True, "mensaje": f"'{ant}' → '{nueva}' actualizada.",
+                    "total_spam": total_spam, "total_ham": total_ham})
 
 
 def _ejecutar_accion(accion_fn, mensaje_id: str, invalidar_cats: list):
@@ -788,10 +859,12 @@ def api_stats():
     """
     @brief Devuelve la precisión del modelo y el recuento de palabras de corrección del usuario.
     """
+    user_id = _get_user_id()
+    spam_usr, ham_usr = _get_correcciones_usuario(user_id)
     return jsonify({
         "accuracy":          round((_ACCURACY or 0) * 100, 1),
-        "correcciones_spam": len(_SPAM_USR),
-        "correcciones_ham":  len(_HAM_USR),
+        "correcciones_spam": len(spam_usr),
+        "correcciones_ham":  len(ham_usr),
     })
 
 

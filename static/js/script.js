@@ -12,10 +12,10 @@ let _correosLeidos  = new Set(JSON.parse(localStorage.getItem('ilico_leidos') ||
 let _ctxCorreoId    = null;   // ID del correo sobre el que se abrió el menú contextual
 
 // == INICIALIZACIÓN ==
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   cargarPerfil();
   cargarStats();
-  sincronizarCorreccionesAlServidor();
+  await sincronizarCorreccionesAlServidor();
   cargarChips();
   selTipo('spam');
   prepararLogout();

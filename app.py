@@ -55,8 +55,15 @@ _TTL_SEGUNDOS = 5 * 60
 _SPAM_USR = []
 _HAM_USR  = []
 
-_CORRECCIONES_FILE    = Path(__file__).parent / "correcciones_usuario.json"
-_FEEDBACK_FILE        = Path(__file__).parent / "feedback_correos.json"
+# Directorio de datos persistentes.
+# En Railway: monta un Volumen en /data y añade DATA_DIR=/data a las variables de entorno.
+# Sin volumen: cae en el directorio de la app (ephemeral, se pierde en cada deploy).
+_DATA_DIR = Path(os.environ.get("DATA_DIR", "")).resolve() \
+            if os.environ.get("DATA_DIR") else Path(__file__).parent
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+_CORRECCIONES_FILE = _DATA_DIR / "correcciones_usuario.json"
+_FEEDBACK_FILE     = _DATA_DIR / "feedback_correos.json"
 _FEEDBACK_LOCK        = threading.Lock()
 
 

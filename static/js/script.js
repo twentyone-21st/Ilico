@@ -459,7 +459,9 @@ function iniciarTooltipNivel() {
  */
 function mostrarBandejaVacia() {
   const tc  = document.getElementById('tabla-contenido');
-  const nom = categoriaActiva === 'archivados' ? 'archivados' : 'en la bandeja principal';
+  const nom = categoriaActiva === 'archivados' ? 'archivados'
+            : categoriaActiva === 'cuarentena'  ? 'en cuarentena'
+            : 'en la bandeja principal';
   if (tc) tc.innerHTML = `<div class="empty"><div class="empty-icon">📭</div><div>No hay correos ${nom}.</div></div>`;
   const badge = document.getElementById('badge-' + categoriaActiva);
   if (badge) badge.textContent = '0';

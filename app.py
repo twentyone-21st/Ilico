@@ -617,9 +617,10 @@ def api_editar_correccion():
 def _ejecutar_accion(accion_fn, mensaje_id: str, invalidar_cats: list):
     """
     @brief Ejecuta una acción sobre un mensaje de Gmail y actualiza el cache en memoria.
-    @param accion_fn     Función de gmail_service a invocar (recibe creds, mensaje_id).
-    @param mensaje_id    ID del mensaje a procesar.
-    @param invalidar_cats Categorías cuyo cache debe eliminarse tras la acción.
+    @param accion_fn      Función de gmail_service a invocar (recibe creds, mensaje_id).
+    @param mensaje_id     ID del mensaje a procesar.
+    @param invalidar_cats Si tiene exactamente un elemento, el correo se mueve a ese bucket
+                          directamente (aparición inmediata sin reload de Gmail).
     @return Respuesta JSON con ok:True o error.
     """
     creds = _get_creds()
@@ -630,14 +631,33 @@ def _ejecutar_accion(accion_fn, mensaje_id: str, invalidar_cats: list):
         accion_fn(creds, mensaje_id)
         with _CACHE_LOCK:
             user_cache = _get_user_cache(user_id)
-            for cat in user_cache:
-                user_cache[cat]["correos"] = [
-                    c for c in user_cache[cat]["correos"] if c.get("id") != mensaje_id
+            # Capturar el objeto del correo antes de borrarlo de los buckets
+            email_obj = None
+            for cat_key in user_cache:
+                for c in user_cache[cat_key]["correos"]:
+                    if c.get("id") == mensaje_id:
+                        email_obj = c
+                        break
+                if email_obj:
+                    break
+            # Eliminar de todos los buckets
+            for cat_key in user_cache:
+                user_cache[cat_key]["correos"] = [
+                    c for c in user_cache[cat_key]["correos"] if c.get("id") != mensaje_id
                 ]
-                user_cache[cat]["stats"] = _stats(user_cache[cat]["correos"])
-            for cat in invalidar_cats:
-                if cat in user_cache:
-                    user_cache[cat]["ts"] = 0.0
+                user_cache[cat_key]["stats"] = _stats(user_cache[cat_key]["correos"])
+            # Insertar directamente en el bucket destino (si hay uno único)
+            if email_obj and len(invalidar_cats) == 1:
+                dest = invalidar_cats[0]
+                if dest in user_cache:
+                    ya_existe = any(c.get("id") == mensaje_id for c in user_cache[dest]["correos"])
+                    if not ya_existe:
+                        user_cache[dest]["correos"].insert(0, email_obj)
+                        user_cache[dest]["stats"] = _stats(user_cache[dest]["correos"])
+            elif invalidar_cats:
+                for cat_key in invalidar_cats:
+                    if cat_key in user_cache:
+                        user_cache[cat_key]["ts"] = 0.0
         return jsonify({"ok": True})
     except Exception as e:
         logger.error(f"Error en acción sobre {mensaje_id}: {e}")
@@ -703,12 +723,26 @@ def api_limpiar_bandeja():
     ids_set = set(ids_ok)
     with _CACHE_LOCK:
         user_cache = _get_user_cache(user_id)
+        # Capturar objetos de correo antes de eliminarlos de los buckets origen
+        emails_a_cuarentena, vistos = [], set()
+        for cat in ("principal", "archivados"):
+            for c in user_cache[cat]["correos"]:
+                cid = c.get("id")
+                if cid in ids_set and cid not in vistos:
+                    emails_a_cuarentena.append(c)
+                    vistos.add(cid)
+        # Eliminar de principal y archivados
         for cat in ("principal", "archivados"):
             user_cache[cat]["correos"] = [
                 c for c in user_cache[cat]["correos"] if c.get("id") not in ids_set
             ]
             user_cache[cat]["stats"] = _stats(user_cache[cat]["correos"])
-        user_cache["cuarentena"]["ts"] = 0.0
+        # Insertar directamente en cuarentena (aparición inmediata sin reload)
+        if emails_a_cuarentena:
+            ya_en_cuarentena = {c.get("id") for c in user_cache["cuarentena"]["correos"]}
+            nuevos = [c for c in emails_a_cuarentena if c.get("id") not in ya_en_cuarentena]
+            user_cache["cuarentena"]["correos"] = nuevos + user_cache["cuarentena"]["correos"]
+            user_cache["cuarentena"]["stats"] = _stats(user_cache["cuarentena"]["correos"])
 
     return jsonify({"ok": True, "movidos": movidos, "errores": errores})
 

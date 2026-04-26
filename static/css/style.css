@@ -202,13 +202,13 @@ body::before {
 /* == BOTONES DE NAVEGACIÓN == */
 .nav-btn {
   display: flex; align-items: center; gap: 10px;
-  padding: 11px 14px;
-  border-radius: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
   border: none;
   background: transparent;
-  color: var(--text-1);
+  color: var(--text-2);
   font-family: var(--font-body);
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.18s ease;
@@ -216,8 +216,10 @@ body::before {
   width: 100%;
 }
 
-.nav-btn:hover  { background: var(--bg-3); color: var(--text-0); }
-.nav-btn.active { background: var(--accent-dim); color: var(--accent); }
+.nav-btn:hover        { background: var(--bg-3); color: var(--text-0); }
+.nav-btn.active       { background: var(--accent-dim); }
+.nav-btn.active .nav-ico  { stroke: var(--accent); }
+.nav-btn.active .nav-text { color: var(--text-0); font-weight: 600; }
 .nav-btn .icon  { font-size: 17px; width: 24px; text-align: center; }
 
 .nav-ico {
@@ -1311,13 +1313,13 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
-  border-radius: 10px;
+  padding: 9px 10px;
+  border-radius: 9px;
   border: none;
   background: transparent;
-  color: var(--text-1);
+  color: var(--text-2);
   font-family: var(--font-body);
-  font-size: 13.5px;
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
   transition: all 0.18s ease;
@@ -1326,20 +1328,19 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   position: relative;
 }
 .nav-categoria:hover  { background: var(--bg-3); color: var(--text-0); }
-.nav-categoria.active { background: var(--accent-dim); color: var(--accent); }
+.nav-categoria.active { background: var(--accent-dim); }
+.nav-categoria.active .nav-ico  { stroke: var(--accent); }
+.nav-categoria.active .nav-text { color: var(--text-0); font-weight: 600; }
 .nav-categoria .cat-icon { font-size: 16px; width: 24px; text-align: center; flex-shrink: 0; }
 .nav-categoria .cat-badge {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 11px;
+  font-weight: 600;
   font-family: var(--font-mono);
-  background: var(--bg-3);
   color: var(--text-2);
-  padding: 1px 7px;
-  border-radius: 50px;
   flex-shrink: 0;
 }
 .nav-categoria.active .cat-badge {
-  background: var(--accent-dim);
   color: var(--accent);
 }
 
@@ -1498,9 +1499,6 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 .btn-limpiar:hover    { border-color: var(--border-md); color: var(--text-0); }
 .btn-limpiar:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-/* == CUARENTENA: badge en rojo cuando está activa == */
-.nav-cuarentena.active           { background: var(--spam-dim); color: var(--spam); }
-.nav-cuarentena.active .cat-badge { background: var(--spam-dim); color: var(--spam); }
 
 /* == MENÚ CONTEXTUAL == */
 .ctx-menu {

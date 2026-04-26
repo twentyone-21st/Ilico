@@ -18,13 +18,14 @@
 
   <!-- SIDEBAR: navegación lateral con categorías de bandeja y herramientas -->
   <aside class="sidebar">
-    <div class="logo">
+    <div class="logo" onclick="location.reload()">
       <div class="logo-mark">
         <div class="logo-icon">🛡️</div>
         <span class="logo-name">Ilico</span>
       </div>
       <div class="logo-sub">NLP + Machine Learning · ITLA</div>
     </div>
+    <div class="sidebar-divider"></div>
 
     <nav class="nav">
       <div class="nav-label">Bandeja</div>
@@ -68,7 +69,7 @@
           <span id="user-email">Conectando...</span>
         </div>
         {% if autenticado %}
-        <a href="/auth/logout" id="btn-logout" class="btn btn-ghost" style="font-size:12px;padding:7px 14px">Cerrar sesión</a>
+        <a href="/auth/logout" id="btn-logout" class="btn btn-ghost">Cerrar sesión</a>
         {% endif %}
       </div>
     </header>
@@ -115,12 +116,15 @@
               </button>
             </div>
           </div>
+          <div class="sidebar-divider"></div>
 
           <!-- Contenido dinámico: spinner, tabla o estado vacío inyectado por JS -->
-          <div id="tabla-contenido">
-            <div class="empty">
-              <div class="empty-icon">📭</div>
-              <div>Cargando tus correos...</div>
+          <div class="table-scroll-wrap">
+            <div id="tabla-contenido">
+              <div class="empty">
+                <div class="empty-icon">📭</div>
+                <div>Cargando tus correos...</div>
+              </div>
             </div>
           </div>
         </div>

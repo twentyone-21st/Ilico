@@ -273,7 +273,7 @@ async function cambiarCategoria(categoria, btn) {
   const titulos = {
     principal:  movil ? 'Principal'  : 'Bandeja de entrada · Principal',
     archivados: movil ? 'Archivados' : 'Bandeja de entrada · Archivados',
-    cuarentena: 'Cuarentena',
+    cuarentena: 'Restringidos',
   };
   document.getElementById('topbar-title').textContent = titulos[categoria] || 'Bandeja de entrada';
 
@@ -461,7 +461,7 @@ function iniciarTooltipNivel() {
 function mostrarBandejaVacia() {
   const tc  = document.getElementById('tabla-contenido');
   const nom = categoriaActiva === 'archivados' ? 'archivados'
-            : categoriaActiva === 'cuarentena'  ? 'en cuarentena'
+            : categoriaActiva === 'cuarentena'  ? 'restringidos'
             : 'en la bandeja principal';
   if (tc) tc.innerHTML = `<div class="empty"><div class="empty-icon">📭</div><div>No hay correos ${nom}.</div></div>`;
   const badge = document.getElementById('badge-' + categoriaActiva);
@@ -1087,26 +1087,34 @@ function _mostrarCtxMenu(x, y, anchorEl) {
   const menu = document.getElementById('ctx-menu');
   if (!menu) return;
 
+  const _i = p => `<svg class="ctx-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const ICO_MAIL    = _i('<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>');
+  const ICO_ARCHIVE = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><line x1="10" y1="12" x2="14" y2="12"/>');
+  const ICO_UNARC   = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><polyline points="10 14 12 16 14 14"/><line x1="12" y1="10" x2="12" y2="16"/>');
+  const ICO_BAN     = _i('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>');
+  const ICO_SHIELD  = _i('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>');
+  const ICO_TRASH   = _i('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>');
+
   const opciones = {
     principal: [
-      { icon: '📧', label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
+      { icon: ICO_MAIL,    label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
       { sep: true },
-      { icon: '🗄️', label: 'Archivar',             fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/archivar','Correo archivado.')` },
-      { icon: '⚠️', label: 'Mover a Cuarentena',  fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo movido a Cuarentena.')`, cls: 'ctx-danger' },
-      { icon: '🗑️', label: 'Eliminar',             fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo enviado a la Papelera.')`, cls: 'ctx-danger' },
+      { icon: ICO_ARCHIVE, label: 'Archivar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/archivar','Correo archivado.')` },
+      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo restringido.')`, cls: 'ctx-danger' },
+      { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },
     ],
     archivados: [
-      { icon: '📧', label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
+      { icon: ICO_MAIL,    label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
       { sep: true },
-      { icon: '📥', label: 'Desarchivar',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/desarchivar','Correo movido a Principal.')` },
-      { icon: '⚠️', label: 'Mover a Cuarentena',  fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo movido a Cuarentena.')`, cls: 'ctx-danger' },
-      { icon: '🗑️', label: 'Eliminar',             fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo enviado a la Papelera.')`, cls: 'ctx-danger' },
+      { icon: ICO_UNARC,   label: 'Desarchivar',         fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/desarchivar','Correo movido a Principal.')` },
+      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo restringido.')`, cls: 'ctx-danger' },
+      { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },
     ],
     cuarentena: [
-      { icon: '📧', label: 'Ver correo',           fn: `abrirCorreo('${_ctxCorreoId}')` },
+      { icon: ICO_MAIL,    label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
       { sep: true },
-      { icon: '✅', label: 'Marcar como deseado',  fn: `_restaurarCorreo('${_ctxCorreoId}')`, cls: 'ctx-restore' },
-      { icon: '🗑️', label: 'Eliminar',             fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo enviado a la Papelera.')`, cls: 'ctx-danger' },
+      { icon: ICO_SHIELD,  label: 'Quitar restricción',  fn: `_restaurarCorreo('${_ctxCorreoId}')`, cls: 'ctx-restore' },
+      { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },
     ],
   };
 
@@ -1114,9 +1122,7 @@ function _mostrarCtxMenu(x, y, anchorEl) {
   menu.innerHTML = items.map(o =>
     o.sep
       ? '<div class="ctx-sep"></div>'
-      : `<div class="ctx-item ${o.cls || ''}" onclick="${o.fn};_cerrarCtxMenu()">
-           <span class="ctx-icon">${o.icon}</span>${o.label}
-         </div>`
+      : `<div class="ctx-item ${o.cls || ''}" onclick="${o.fn};_cerrarCtxMenu()">${o.icon}${o.label}</div>`
   ).join('');
 
   // Medir el menú fuera de la vista antes de posicionarlo

@@ -16,38 +16,58 @@
   <!-- Fondo oscuro que aparece cuando el sidebar está abierto en móvil -->
   <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
 
+  <!-- Iconos reutilizables -->
+  <svg style="display:none">
+    <symbol id="ico-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+    <symbol id="ico-archive" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+    <symbol id="ico-warn" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="ico-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="ico-teach" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+  </svg>
+
   <!-- SIDEBAR: navegación lateral con categorías de bandeja y herramientas -->
   <aside class="sidebar">
     <div class="logo" onclick="location.reload()">
       <div class="logo-mark">
-        <div class="logo-icon">🛡️</div>
+        <svg viewBox="0 0 40 40" style="width:36px;height:36px;flex-shrink:0">
+          <rect width="40" height="40" rx="10" fill="#4a6cf7"/>
+          <circle cx="20" cy="10.5" r="3.2" fill="#fff"/>
+          <rect x="10" y="17.5" width="20" height="3" rx="1.5" fill="#fff"/>
+          <rect x="13.5" y="23" width="13" height="3" rx="1.5" fill="#fff"/>
+          <rect x="17" y="28.5" width="6" height="3" rx="1.5" fill="#fff"/>
+        </svg>
         <span class="logo-name">Ilico</span>
       </div>
-      <div class="logo-sub">NLP + Machine Learning · ITLA</div>
+      <div class="logo-sub">NLP · Machine Learning · ITLA</div>
     </div>
     <div class="sidebar-divider"></div>
 
     <nav class="nav">
       <div class="nav-label">Bandeja</div>
       <button class="nav-categoria active" onclick="cambiarCategoria('principal', this)">
-        <span class="cat-icon">📥</span> Principal
+        <svg class="nav-ico"><use href="#ico-inbox"/></svg>
+        <span class="nav-text">Principal</span>
         <span class="cat-badge" id="badge-principal">—</span>
       </button>
       <button class="nav-categoria" onclick="cambiarCategoria('archivados', this)">
-        <span class="cat-icon">🗄️</span> Archivados
+        <svg class="nav-ico"><use href="#ico-archive"/></svg>
+        <span class="nav-text">Archivados</span>
         <span class="cat-badge" id="badge-archivados">—</span>
       </button>
       <button class="nav-categoria nav-cuarentena" onclick="cambiarCategoria('cuarentena', this)">
-        <span class="cat-icon">⚠️</span> Cuarentena
+        <svg class="nav-ico"><use href="#ico-warn"/></svg>
+        <span class="nav-text">Restringidos</span>
         <span class="cat-badge" id="badge-cuarentena">—</span>
       </button>
 
       <div class="nav-label" style="margin-top:8px">Herramientas</div>
       <button class="nav-btn" onclick="mostrarSeccion('clasificar', this)">
-        <span class="icon">🔍</span> Clasificar texto
+        <svg class="nav-ico"><use href="#ico-search"/></svg>
+        <span class="nav-text">Clasificar texto</span>
       </button>
       <button class="nav-btn" onclick="mostrarSeccion('aprender', this)">
-        <span class="icon">🧠</span> Enseñar al sistema
+        <svg class="nav-ico"><use href="#ico-teach"/></svg>
+        <span class="nav-text">Enseñar al sistema</span>
       </button>
     </nav>
 

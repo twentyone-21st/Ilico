@@ -148,11 +148,8 @@ body::before {
   font-family: var(--font-display);
   font-size: 17px;
   font-weight: 800;
-  letter-spacing: -0.5px;
-  white-space: nowrap;
-  background: linear-gradient(90deg, #fff 0%, var(--text-1) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.4px;
+  color: var(--text-0);
 }
 
 .logo-sub {
@@ -222,6 +219,14 @@ body::before {
 .nav-btn:hover  { background: var(--bg-3); color: var(--text-0); }
 .nav-btn.active { background: var(--accent-dim); color: var(--accent); }
 .nav-btn .icon  { font-size: 17px; width: 24px; text-align: center; }
+
+.nav-ico {
+  width: 16px; height: 16px;
+  stroke: currentColor; stroke-width: 1.75;
+  fill: none; stroke-linecap: round; stroke-linejoin: round;
+  flex-shrink: 0;
+}
+.nav-text { flex: 1; }
 
 /* == TOPBAR == */
 .topbar {
@@ -1539,6 +1544,12 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 .ctx-item.ctx-restore        { color: var(--ham); }
 .ctx-item.ctx-restore:hover  { background: var(--ham-dim); color: var(--ham); }
 .ctx-item .ctx-icon          { font-size: 15px; width: 20px; text-align: center; flex-shrink: 0; }
+.ctx-ico {
+  width: 15px; height: 15px;
+  stroke: currentColor; stroke-width: 1.75;
+  fill: none; stroke-linecap: round; stroke-linejoin: round;
+  flex-shrink: 0;
+}
 
 .ctx-sep {
   height: 1px;

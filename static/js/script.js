@@ -1088,32 +1088,32 @@ function _mostrarCtxMenu(x, y, anchorEl) {
   if (!menu) return;
 
   const _i = p => `<svg class="ctx-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
-  const ICO_MAIL    = _i('<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>');
   const ICO_ARCHIVE = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><line x1="10" y1="12" x2="14" y2="12"/>');
   const ICO_UNARC   = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><polyline points="10 14 12 16 14 14"/><line x1="12" y1="10" x2="12" y2="16"/>');
   const ICO_BAN     = _i('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>');
   const ICO_SHIELD  = _i('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>');
   const ICO_TRASH   = _i('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>');
+  const ICO_PHONE   = _i('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.15 12 19.79 19.79 0 0 1 1.05 3.4 2 2 0 0 1 3 1h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L7.09 8.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 21 16z"/>');
 
   const opciones = {
     principal: [
-      { icon: ICO_MAIL,    label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
-      { sep: true },
       { icon: ICO_ARCHIVE, label: 'Archivar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/archivar','Correo archivado.')` },
-      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo restringido.')`, cls: 'ctx-danger' },
+      { icon: ICO_PHONE,   label: 'Marcar como leído',   fn: `_marcarLeido('${_ctxCorreoId}')` },
+      { sep: true },
       { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },
+      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo restringido.')`, cls: 'ctx-danger' },
     ],
     archivados: [
-      { icon: ICO_MAIL,    label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
-      { sep: true },
       { icon: ICO_UNARC,   label: 'Desarchivar',         fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/desarchivar','Correo movido a Principal.')` },
-      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo restringido.')`, cls: 'ctx-danger' },
+      { icon: ICO_PHONE,   label: 'Marcar como leído',   fn: `_marcarLeido('${_ctxCorreoId}')` },
+      { sep: true },
       { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },
+      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo restringido.')`, cls: 'ctx-danger' },
     ],
     cuarentena: [
-      { icon: ICO_MAIL,    label: 'Ver correo',          fn: `abrirCorreo('${_ctxCorreoId}')` },
+      { icon: ICO_SHIELD,  label: 'Quitar restricción',  fn: `_restaurarCorreo('${_ctxCorreoId}')` },
+      { icon: ICO_PHONE,   label: 'Marcar como leído',   fn: `_marcarLeido('${_ctxCorreoId}')` },
       { sep: true },
-      { icon: ICO_SHIELD,  label: 'Quitar restricción',  fn: `_restaurarCorreo('${_ctxCorreoId}')`, cls: 'ctx-restore' },
       { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },
     ],
   };
@@ -1153,6 +1153,13 @@ function _cerrarCtxMenu() {
   const menu = document.getElementById('ctx-menu');
   if (menu) menu.classList.remove('visible');
   _ctxCorreoId = null;
+}
+
+function _marcarLeido(id) {
+  _correosLeidos.add(String(id));
+  localStorage.setItem('ilico_leidos', JSON.stringify([..._correosLeidos]));
+  const dot = document.querySelector(`tr[data-id="${id}"] .dot-nuevo`);
+  if (dot) dot.remove();
 }
 
 /**

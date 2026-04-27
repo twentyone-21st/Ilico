@@ -117,8 +117,12 @@ body::before {
 
 /* == LOGOTIPO == */
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background: var(--bg-1);
-  padding: 28px 20px 20px;
+  padding: 20px 20px 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
   cursor: pointer;
 }
 
@@ -129,34 +133,27 @@ body::before {
   flex-shrink: 0;
 }
 
-.logo-mark {
+.logo-text {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.logo-icon {
-  width: 36px; height: 36px;
-  background: linear-gradient(135deg, var(--accent), #7b5cf7);
-  border-radius: 10px;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 18px;
+  flex-direction: column;
 }
 
 .logo-name {
   font-family: var(--font-display);
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 800;
   letter-spacing: -0.4px;
   color: var(--text-0);
+  line-height: 1;
 }
 
 .logo-sub {
-  font-size: 11px;
+  font-size: 9px;
+  font-weight: 500;
   color: var(--text-2);
-  font-family: var(--font-mono);
-  letter-spacing: 0.05em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-top: 2px;
 }
 
 /* == NAVEGACIÓN LATERAL == */
@@ -193,10 +190,11 @@ body::before {
 .nav-label {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  color: var(--text-2);
+  letter-spacing: 0.10em;
+  color: #3a4260;
   text-transform: uppercase;
-  padding: 12px 12px 6px;
+  padding: 2px 8px;
+  margin-bottom: 2px;
 }
 
 /* == BOTONES DE NAVEGACIÓN == */
@@ -1506,8 +1504,8 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   z-index: 9000;
   background: var(--bg-2);
   border: 1px solid var(--border-md);
-  border-radius: 11px;
-  padding: 5px 0;
+  border-radius: 12px;
+  padding: 6px;
   min-width: 210px;
   box-shadow: 0 12px 40px rgba(0,0,0,0.55), 0 2px 8px rgba(0,0,0,0.3);
   display: none;
@@ -1526,10 +1524,12 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 .ctx-item {
   display: flex;
   align-items: center;
-  gap: 11px;
-  padding: 10px 16px;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
   cursor: pointer;
   font-size: 13px;
+  font-weight: 500;
   font-family: var(--font-body);
   color: var(--text-1);
   transition: background 0.12s, color 0.12s;
@@ -1551,8 +1551,8 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 
 .ctx-sep {
   height: 1px;
-  background: var(--border);
-  margin: 4px 0;
+  background: rgba(255,255,255,0.10);
+  margin: 4px 12px;
 }
 
 /* == INDICADOR DE CORREO NO LEÍDO == */

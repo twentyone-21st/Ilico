@@ -261,7 +261,13 @@
     <div class="modal" id="modal">
       <div class="modal-header">
         <div class="modal-asunto" id="modal-asunto">Cargando...</div>
-        <button class="modal-close" onclick="cerrarModalBtn()">✕</button>
+        <div class="modal-header-right">
+          <div class="modal-clas-row" id="modal-clas-row">
+            <span id="modal-badge"></span>
+            <span class="modal-razon" id="modal-razon"></span>
+          </div>
+          <button class="modal-close" onclick="cerrarModalBtn()">✕</button>
+        </div>
       </div>
       <!-- Metadatos del correo: remitente y fecha -->
       <div class="modal-meta" id="modal-meta">
@@ -274,20 +280,6 @@
           <span class="modal-meta-value" id="modal-fecha">—</span>
         </div>
       </div>
-      <!-- Clasificación y razón del correo -->
-      <div class="modal-clas-row" id="modal-clas-row">
-        <span id="modal-badge"></span>
-        <span class="modal-razon" id="modal-razon"></span>
-      </div>
-      <!-- Análisis de seguridad del correo -->
-      <div class="modal-security" id="modal-security">
-        <div class="modal-security-header">
-          <span class="modal-security-icon" id="sec-nivel-icon"></span>
-          <span class="modal-security-titulo" id="sec-nivel-texto"></span>
-        </div>
-        <div class="sec-amenazas" id="sec-amenazas"></div>
-      </div>
-      <!-- /Análisis de seguridad -->
 
       <!-- Cuerpo del correo: texto plano o HTML en iframe sandboxed -->
       <div class="modal-body" id="modal-body">
@@ -295,9 +287,6 @@
           <div class="spinner"></div>
           Cargando contenido del correo...
         </div>
-      </div>
-      <div class="modal-footer">
-        <button class="btn btn-ghost" onclick="cerrarModalBtn()">Cerrar</button>
       </div>
     </div>
   </div>

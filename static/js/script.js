@@ -1087,17 +1087,13 @@ function _mostrarCtxMenu(x, y, anchorEl) {
   const menu = document.getElementById('ctx-menu');
   if (!menu) return;
 
-  const _i  = p => `<svg class="ctx-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
-  const _iw = p => `<svg class="ctx-ico-wide" viewBox="0 0 60 44" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
+  const _i = p => `<svg class="ctx-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 
-  const _CABINET = '<path d="M2,11 L2,38 L19,38 L19,11 Z"/><path d="M2,11 L10,4 L27,4 L19,11 Z"/><path d="M19,11 L27,4 L27,31 L19,38 Z"/><line x1="2" y1="24" x2="19" y2="24"/><line x1="19" y1="24" x2="27" y2="17"/><line x1="5" y1="18" x2="14" y2="18" stroke-linecap="round"/><line x1="5" y1="31" x2="14" y2="31" stroke-linecap="round"/>';
-  const _ENVELOPE = '<rect x="34" y="24" width="18" height="14" rx="2"/><path d="M52,27 L44,32 A1.8,1.8 0 0 1 42,32 L34,27"/>';
-  const ICO_ARCHIVE = _iw(_CABINET + '<path d="M43,19 L43,12 Q43,8 39,8 L32,8"/><path d="M35,5 L32,8 L35,11"/>' + _ENVELOPE);
-  const ICO_UNARC   = _iw(_CABINET + '<path d="M32,8 L39,8 Q43,8 43,12 L43,19"/><path d="M40,16 L43,19 L46,16"/>' + _ENVELOPE);
-
-  const ICO_BAN    = _i('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>');
-  const ICO_SHIELD = _i('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>');
-  const ICO_TRASH  = _i('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>');
+  const ICO_ARCHIVE = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><line x1="10" y1="12" x2="14" y2="12"/>');
+  const ICO_UNARC   = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><polyline points="10 14 12 16 14 14"/><line x1="12" y1="10" x2="12" y2="16"/>');
+  const ICO_BAN     = _i('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>');
+  const ICO_SHIELD  = _i('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>');
+  const ICO_TRASH   = _i('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>');
   const opciones = {
     principal: [
       { icon: ICO_ARCHIVE, label: 'Archivar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/archivar','Correo archivado.')` },

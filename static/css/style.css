@@ -1554,13 +1554,6 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   flex-shrink: 0;
 }
 
-.ctx-ico-wide {
-  width: 30px; height: 22px;
-  stroke: currentColor; stroke-width: 1.5;
-  fill: none; stroke-linecap: round; stroke-linejoin: round;
-  flex-shrink: 0;
-}
-
 .ctx-sep {
   height: 1px;
   background: rgba(255,255,255,0.10);

@@ -157,35 +157,45 @@
 
       <!-- SECCIÓN: CLASIFICAR TEXTO — permite analizar cualquier mensaje manualmente -->
       <section id="sec-clasificar" class="section">
-        <div class="classify-panel">
-          <div class="panel-title">Clasificar texto</div>
-          <div class="panel-sub">Pega o escribe cualquier mensaje para analizarlo con el modelo.</div>
-          <div class="classify-form">
-            <textarea id="txt-input" placeholder="Escribe o pega aquí el mensaje que quieres clasificar..."></textarea>
-            <div>
-              <button type="button" class="btn btn-primary" id="btn-clasificar" onclick="clasificarTexto()">Analizar mensaje</button>
-            </div>
-            <!-- Panel de resultado: se muestra tras recibir la respuesta de la API -->
-            <div class="result-box" id="result-box">
-              <div class="result-main">
-                <div class="result-icon" id="r-icon"></div>
-                <div>
-                  <div class="result-title" id="r-clas"></div>
-                  <div class="result-conf"  id="r-conf"></div>
-                </div>
+        <div class="classify-wrap">
+
+          <!-- Panel izquierdo: entrada de texto -->
+          <div class="classify-left">
+            <div class="panel">
+              <div class="panel-head">
+                <div class="panel-title">Texto a analizar</div>
               </div>
-              <div class="prob-row">
-                <div class="prob-item">
-                  <div class="prob-label">Probabilidad SPAM</div>
-                  <div class="prob-value spam" id="r-pspam">—</div>
-                </div>
-                <div class="prob-item">
-                  <div class="prob-label">Probabilidad HAM</div>
-                  <div class="prob-value ham" id="r-pham">—</div>
-                </div>
+              <div class="sidebar-divider"></div>
+              <div class="panel-body">
+                <textarea class="classify-textarea" id="txt-input" placeholder="Escribe o pega aquí el mensaje que quieres clasificar..."></textarea>
+              </div>
+              <div class="panel-foot">
+                <button type="button" class="btn-classify" id="btn-clasificar" onclick="clasificarTexto()">Clasificar</button>
               </div>
             </div>
           </div>
+
+          <!-- Panel derecho: tarjeta de resultado -->
+          <div class="classify-right">
+            <div class="result-card" id="result-card">
+              <div class="result-icon-bg empty" id="r-icon-bg">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </div>
+              <div class="result-label" id="r-clas" style="display:none"></div>
+              <div class="result-empty-msg" id="r-empty-msg">Aún no has introducido un texto para clasificar</div>
+              <div class="result-conf" id="r-conf" style="display:none"></div>
+              <div class="result-bar-wrap" id="r-bar-wrap" style="display:none">
+                <div class="result-bar-fill" id="r-bar-fill"></div>
+              </div>
+              <div class="result-sep" id="r-sep" style="display:none"></div>
+              <div class="result-desc" id="r-desc" style="display:none"></div>
+              <div class="result-tags" id="r-tags" style="display:none"></div>
+              <button class="btn-aceptar" id="btn-aceptar" onclick="aceptarResultado()" style="display:none">Aceptar</button>
+            </div>
+          </div>
+
         </div>
       </section>
       <!-- /SECCIÓN CLASIFICAR -->

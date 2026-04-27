@@ -235,8 +235,6 @@ function iniciarAutoRefresh() {
         renderTabla(todosLosCorreos);
         mostrarHoraActualizacion();
         // Suprimir el toast cuando la carga de fondo recién terminó (no son correos nuevos reales)
-        if (llegaron.length > 0 && !_cargandoFondo && !justFinishedLoading)
-          mostrarToast(`📬 ${llegaron.length} correo${llegaron.length > 1 ? 's' : ''} nuevo${llegaron.length > 1 ? 's' : ''}.`);
       } else if (d.vacio && !d.loading) {
         todosLosCorreos = [];
         mostrarBandejaVacia();
@@ -326,17 +324,45 @@ function mostrarSeccion(id, btn) {
 }
 
 /**
- * @brief Limpia el cuadro de resultado de clasificación manual, ocultándolo y borrando su contenido.
+ * @brief Restablece la tarjeta de resultado al estado vacío inicial.
  */
 function resetResultBox() {
-  const box = document.getElementById('result-box');
-  if (!box) return;
-  box.classList.remove('visible', 'result-loading');
-  box.style.background = box.style.borderColor = '';
-  [['r-icon',''],['r-clas',''],['r-conf',''],['r-pspam','—'],['r-pham','—']].forEach(([id,txt]) => {
+  const card = document.getElementById('result-card');
+  if (!card) return;
+  card.className = 'result-card';
+
+  const iconBg = document.getElementById('r-icon-bg');
+  if (iconBg) {
+    iconBg.className = 'result-icon-bg empty';
+    iconBg.innerHTML = '<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>';
+  }
+
+  const clasEl = document.getElementById('r-clas');
+  if (clasEl) { clasEl.textContent = ''; clasEl.className = 'result-label'; clasEl.style.display = 'none'; }
+
+  const emptyMsg = document.getElementById('r-empty-msg');
+  if (emptyMsg) { emptyMsg.textContent = 'Aún no has introducido un texto para clasificar'; emptyMsg.style.display = ''; }
+
+  ['r-conf', 'r-bar-wrap', 'r-sep', 'r-desc', 'r-tags', 'btn-aceptar'].forEach(id => {
     const el = document.getElementById(id);
-    if (el) { el.textContent = txt; el.style.color = ''; }
+    if (el) el.style.display = 'none';
   });
+
+  const textarea = document.getElementById('txt-input');
+  if (textarea) textarea.disabled = false;
+
+  const btnClas = document.getElementById('btn-clasificar');
+  if (btnClas) btnClas.disabled = false;
+}
+
+/**
+ * @brief Acepta el resultado y restaura la interfaz al estado inicial para un nuevo análisis.
+ */
+function aceptarResultado() {
+  const textarea = document.getElementById('txt-input');
+  if (textarea) textarea.value = '';
+  resetResultBox();
+  if (textarea) textarea.focus();
 }
 
 /**
@@ -630,13 +656,35 @@ function renderTabla(correos) {
  */
 async function clasificarTexto() {
   const texto = document.getElementById('txt-input').value.trim();
-  if (!texto) { mostrarToast('Escribe un mensaje primero.'); return; }
-  const box = document.getElementById('result-box');
-  box.classList.add('result-loading');
-  box.classList.add('visible');
-  document.getElementById('r-icon').textContent  = '⏳';
-  document.getElementById('r-clas').textContent  = 'Analizando...';
-  document.getElementById('r-conf').textContent  = '';
+  if (!texto) { resetResultBox(); return; }
+
+  // Bloquear entrada mientras se analiza
+  const textarea = document.getElementById('txt-input');
+  if (textarea) textarea.disabled = true;
+  const btnClas = document.getElementById('btn-clasificar');
+  if (btnClas) btnClas.disabled = true;
+
+  // Estado de carga
+  const card = document.getElementById('result-card');
+  if (card) card.className = 'result-card';
+
+  const iconBg = document.getElementById('r-icon-bg');
+  if (iconBg) {
+    iconBg.className = 'result-icon-bg empty';
+    iconBg.innerHTML = '<div class="spinner" style="width:28px;height:28px;margin:0;border-width:2px;"></div>';
+  }
+
+  const emptyMsg = document.getElementById('r-empty-msg');
+  if (emptyMsg) { emptyMsg.textContent = 'Analizando...'; emptyMsg.style.display = ''; }
+
+  const clasEl = document.getElementById('r-clas');
+  if (clasEl) clasEl.style.display = 'none';
+
+  ['r-conf', 'r-bar-wrap', 'r-sep', 'r-desc', 'r-tags'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  });
+
   try {
     const r = await fetch('/api/clasificar', {
       method: 'POST',
@@ -647,30 +695,83 @@ async function clasificarTexto() {
     mostrarResultado(d);
   } catch {
     mostrarToast('Error al clasificar el texto.');
-    box.classList.remove('result-loading', 'visible');
+    resetResultBox();
   }
 }
 
 /**
- * @brief Rellena el panel de resultado con la clasificación, confianza y probabilidades devueltas por la API.
+ * @brief Rellena la tarjeta de resultado con la clasificación devuelta por la API.
  * @param {Object} d Respuesta JSON del endpoint /api/clasificar.
  */
 function mostrarResultado(d) {
-  const box    = document.getElementById('result-box');
-  const iconos = { SPAM:'🚫', HAM:'✅', SOSPECHOSO:'⚠️', INDETERMINADO:'❓' };
-  const colores= { SPAM:'var(--spam)', HAM:'var(--ham)', SOSPECHOSO:'var(--sosp)', INDETERMINADO:'var(--text-2)' };
-  document.getElementById('r-icon').textContent  = iconos[d.clasificacion]  || '❓';
-  document.getElementById('r-clas').textContent  = d.clasificacion;
-  document.getElementById('r-clas').style.color  = colores[d.clasificacion] || '';
-  document.getElementById('r-conf').textContent  = `Confianza: ${d.confianza}%${d.ajustado ? ' · ajustado' : ''}`;
-  document.getElementById('r-pspam').textContent = (d.prob_spam ?? '—') + '%';
-  document.getElementById('r-pham').textContent  = (d.prob_ham  ?? '—') + '%';
-  if (d.razon) document.getElementById('r-conf').textContent += ` · ${d.razon}`;
-  const col = colores[d.clasificacion];
-  box.style.background  = d.clasificacion === 'SPAM' ? 'var(--spam-dim)' : d.clasificacion === 'HAM' ? 'var(--ham-dim)' : d.clasificacion === 'SOSPECHOSO' ? 'var(--sosp-dim)' : 'var(--bg-2)';
-  box.style.borderColor = col ? col.replace(')', ',0.3)').replace('var(','rgba(') : 'var(--border)';
-  box.classList.remove('result-loading');
-  box.classList.add('visible');
+  const clas   = d.clasificacion || 'INDETERMINADO';
+  const clsKey = clas === 'SOSPECHOSO' ? 'sosp' : clas === 'SPAM' ? 'spam' : clas === 'HAM' ? 'ham' : '';
+
+  const card = document.getElementById('result-card');
+  if (card) card.className = 'result-card' + (clsKey ? ` ${clsKey}-result` : '');
+
+  const iconBg = document.getElementById('r-icon-bg');
+  if (iconBg) {
+    iconBg.className = 'result-icon-bg' + (clsKey ? ` ${clsKey}` : ' empty');
+    const icoPaths = {
+      spam: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+      ham:  '<polyline points="20 6 9 17 4 12"/>',
+      sosp: '<path d="M12 9v4"/><path d="M12 17h.01"/>',
+    };
+    const icoColor = { spam: 'var(--spam)', ham: 'var(--ham)', sosp: 'var(--sosp)' }[clsKey] || 'var(--text-2)';
+    iconBg.innerHTML = `<svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="${icoColor}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${icoPaths[clsKey] || '<line x1="5" y1="12" x2="19" y2="12"/>'}</svg>`;
+  }
+
+  const emptyMsg = document.getElementById('r-empty-msg');
+  if (emptyMsg) emptyMsg.style.display = 'none';
+
+  const clasEl = document.getElementById('r-clas');
+  if (clasEl) {
+    clasEl.textContent = clas;
+    clasEl.className = 'result-label' + (clsKey ? ` ${clsKey}` : '');
+    clasEl.style.display = '';
+  }
+
+  const confEl = document.getElementById('r-conf');
+  if (confEl) {
+    confEl.textContent = `${d.confianza ?? '—'}% de confianza`;
+    confEl.style.display = '';
+  }
+
+  const barWrap = document.getElementById('r-bar-wrap');
+  const barFill = document.getElementById('r-bar-fill');
+  if (barWrap && barFill) {
+    barFill.className = 'result-bar-fill' + (clsKey ? ` ${clsKey}` : '');
+    barFill.style.width = (d.confianza || 0) + '%';
+    barWrap.style.display = '';
+  }
+
+  const sep  = document.getElementById('r-sep');
+  const desc = document.getElementById('r-desc');
+  if (d.razon) {
+    if (sep)  sep.style.display  = '';
+    if (desc) { desc.textContent = d.razon; desc.style.display = ''; }
+  } else {
+    if (sep)  sep.style.display  = 'none';
+    if (desc) desc.style.display = 'none';
+  }
+
+  const tagsEl = document.getElementById('r-tags');
+  if (tagsEl) {
+    if (d.palabras_clave && d.palabras_clave.length > 0) {
+      tagsEl.innerHTML = d.palabras_clave.map(p => {
+        const label = typeof p === 'object' ? p.palabra : p;
+        const tipo  = typeof p === 'object' ? (p.tipo || clsKey || '') : (clsKey || '');
+        return `<span class="result-tag ${tipo}">${esc(label)}</span>`;
+      }).join('');
+      tagsEl.style.display = '';
+    } else {
+      tagsEl.style.display = 'none';
+    }
+  }
+
+  const btnAceptar = document.getElementById('btn-aceptar');
+  if (btnAceptar) btnAceptar.style.display = '';
 }
 
 /**

@@ -941,7 +941,7 @@ function abrirFPM(id, clasificacion, textoClasificar) {
   document.querySelector('.fpm-btn-row').style.display  = 'flex';
   document.getElementById('fpm-palabra').value = '';
 
-  const label = clasificacion === 'SPAM' ? 'SPAM 🚫' : clasificacion === 'HAM' ? 'HAM ✅' : 'SOSPECHOSO ⚠️';
+  const label = clasificacion === 'SPAM' ? 'SPAM' : clasificacion === 'HAM' ? 'HAM' : 'SOSPECHOSO';
   document.getElementById('fpm-pregunta').textContent =
     `Ilico clasificó este correo como ${label}. ¿Es correcto?`;
 
@@ -965,7 +965,7 @@ function fpmRespuesta(correcto) {
     document.getElementById('fpm-pregunta').style.display = 'none';
     document.querySelector('.fpm-btn-row').style.display  = 'none';
     const ok = document.getElementById('fpm-ok');
-    ok.textContent = '✅ Clasificación confirmada. ¡Gracias!';
+    ok.textContent = 'Clasificación confirmada. ¡Gracias!';
     ok.classList.add('visible');
     setTimeout(cerrarFPM, 1800);
   } else {
@@ -1010,7 +1010,7 @@ async function fpmGuardar() {
     document.getElementById('fpm-pregunta').style.display = 'none';
     document.querySelector('.fpm-btn-row').style.display  = 'none';
     const ok = document.getElementById('fpm-ok');
-    ok.textContent = `✅ Modelo actualizado con: ${palabras.join(', ')}`;
+    ok.textContent = `Modelo actualizado con: ${palabras.join(', ')}`;
     ok.classList.add('visible');
     cargarChips();
     cargarStats();
@@ -1096,11 +1096,11 @@ function _mostrarCtxMenu(x, y, anchorEl) {
 
   const _i = p => `<svg class="ctx-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">${p}</svg>`;
 
-  const ICO_ARCHIVE = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><line x1="10" y1="12" x2="14" y2="12"/>');
-  const ICO_UNARC   = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><polyline points="10 14 12 16 14 14"/><line x1="12" y1="10" x2="12" y2="16"/>');
-  const ICO_BAN     = _i('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>');
-  const ICO_SHIELD  = _i('<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="m9 12 2 2 4-4"/>');
-  const ICO_TRASH   = _i('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>');
+  const ICO_ARCHIVE  = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><line x1="10" y1="12" x2="14" y2="12"/>');
+  const ICO_UNARC    = _i('<polyline points="21 8 21 21 3 21 3 8"/><polyline points="1 3 23 3 23 8 1 8 1 3"/><polyline points="10 14 12 16 14 14"/><line x1="12" y1="10" x2="12" y2="16"/>');
+  const ICO_BAN      = _i('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>');
+  const ICO_RESTORE  = _i('<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>');
+  const ICO_TRASH    = _i('<polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>');
   const opciones = {
     principal: [
       { icon: ICO_ARCHIVE, label: 'Archivar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/archivar','Correo archivado.')` },
@@ -1115,7 +1115,7 @@ function _mostrarCtxMenu(x, y, anchorEl) {
       { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo restringido.')`, cls: 'ctx-danger' },
     ],
     cuarentena: [
-      { icon: ICO_SHIELD,  label: 'Quitar restricción',  fn: `_restaurarCorreo('${_ctxCorreoId}')` },
+      { icon: ICO_RESTORE, label: 'Restaurar',             fn: `_restaurarCorreo('${_ctxCorreoId}')` },
       { sep: true },
       { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },
     ],

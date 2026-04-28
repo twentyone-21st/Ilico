@@ -1217,6 +1217,19 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   font-size: 13px;
   font-weight: 700;
   color: var(--text-0);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.fpm-header svg {
+  width: 15px;
+  height: 15px;
+  stroke: var(--accent);
+  stroke-width: 1.75;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
 }
 
 .fpm-body { padding: 14px 16px; }
@@ -1236,6 +1249,10 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 
 .fpm-btn {
   flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   padding: 8px 10px;
   border-radius: 8px;
   border: 1px solid var(--border);
@@ -1246,6 +1263,17 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   cursor: pointer;
   font-family: var(--font-body);
   transition: all 0.15s;
+}
+.fpm-btn svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  stroke-width: 1.75;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  flex-shrink: 0;
+  pointer-events: none;
 }
 .fpm-btn:hover         { background: var(--bg-3); color: var(--text-0); }
 .fpm-btn.correcto:hover { background: var(--ham-dim);  color: var(--ham);  border-color: rgba(46,213,115,0.4); }

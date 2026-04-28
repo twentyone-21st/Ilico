@@ -302,14 +302,23 @@
 
 <!-- PANEL FLOTANTE: verificación de clasificación (FPM) — aparece al abrir un correo -->
 <div class="feedback-panel-modal" id="fpm">
-  <div class="fpm-header">🤖 Verificación de clasificación</div>
+  <div class="fpm-header">
+    <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+    Verificación de clasificación
+  </div>
   <div class="fpm-body">
     <div class="fpm-pregunta" id="fpm-pregunta">
       ¿Ilico clasificó este correo correctamente?
     </div>
     <div class="fpm-btn-row">
-      <button class="fpm-btn correcto"   onclick="fpmRespuesta(true)">✅ Sí, correcto</button>
-      <button class="fpm-btn incorrecto" onclick="fpmRespuesta(false)">❌ No, corregir</button>
+      <button class="fpm-btn correcto"   onclick="fpmRespuesta(true)">
+        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+        Sí, correcto
+      </button>
+      <button class="fpm-btn incorrecto" onclick="fpmRespuesta(false)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+        No, corregir
+      </button>
     </div>
     <!-- Formulario de corrección: visible solo si el usuario indica clasificación incorrecta -->
     <div class="fpm-correccion" id="fpm-correccion">
@@ -323,7 +332,7 @@
              onkeydown="if(event.key==='Enter')fpmGuardar()">
       <button class="fpm-guardar" onclick="fpmGuardar()">Guardar y entrenar al modelo</button>
     </div>
-    <div class="fpm-ok" id="fpm-ok">✅ ¡Gracias! El modelo ha aprendido de tu corrección.</div>
+    <div class="fpm-ok" id="fpm-ok">¡Gracias! El modelo ha aprendido de tu corrección.</div>
   </div>
 </div>
 <!-- /PANEL FLOTANTE -->

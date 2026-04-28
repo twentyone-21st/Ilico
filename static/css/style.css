@@ -831,6 +831,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   .feedback-resumen  { grid-template-columns: 1fr; }
   .correcciones-grid { grid-template-columns: 1fr; }
   .correcciones-grupo { height: 250px; }
+  .teach-wrap { grid-template-columns: 1fr; }
 
   /* Panel FPM: se ancla abajo en vez de a la derecha */
   .feedback-panel-modal {
@@ -1027,6 +1028,154 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 .btn-icon.cancelar:hover { border-color: var(--sosp);   color: var(--sosp);  }
 
 .correcciones-empty { padding: 20px 16px; color: var(--text-2); font-size: 13px; text-align: center; }
+
+/* == MÓDULO ENSEÑAR AL SISTEMA (CHIPS) == */
+.teach-wrap {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.teach-col {
+  display: flex;
+  flex-direction: column;
+}
+
+.teach-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 10px;
+}
+
+.teach-panel-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-2);
+}
+
+.teach-count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: #4A6CF7;
+}
+
+.teach-divider {
+  height: 1px;
+  background: var(--border);
+  margin-bottom: 12px;
+}
+
+.teach-chips-area {
+  flex: 1;
+  min-height: 80px;
+  max-height: 150px;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 6px;
+  padding: 2px 0 8px;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.teach-chips-area::-webkit-scrollbar { display: none; }
+
+.teach-empty {
+  font-size: 12px;
+  color: var(--text-2);
+  width: 100%;
+  text-align: center;
+  padding: 18px 0;
+}
+
+.teach-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 50px;
+  border: 1px solid #4A6CF7;
+  color: #4A6CF7;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  background: rgba(74, 108, 247, 0.08);
+  cursor: default;
+  transition: opacity 0.15s, background 0.15s;
+  user-select: none;
+}
+
+.teach-chip.dimmed {
+  opacity: 0.3;
+  cursor: pointer;
+}
+
+.teach-chip.sel {
+  opacity: 1;
+  background: rgba(74, 108, 247, 0.22);
+  cursor: pointer;
+}
+
+.teach-input-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.teach-input {
+  flex: 1;
+  min-width: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-0);
+  font-family: var(--font-body);
+  font-size: 13px;
+  padding: 7px 12px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.teach-input:focus { border-color: var(--accent); }
+
+.teach-btn-add {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 7px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: opacity 0.15s;
+}
+
+.teach-btn-add:hover { opacity: 0.85; }
+
+.teach-btn-del {
+  margin-top: 8px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-2);
+  font-family: var(--font-body);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.teach-btn-del:hover { border-color: var(--spam); color: var(--spam); }
+.teach-btn-del.modo-eliminar { border-color: var(--spam); color: var(--spam); background: var(--spam-dim); }
+.teach-btn-del.confirmar     { border-color: var(--spam); color: #fff;       background: var(--spam); }
 
 
 /* == MODAL DE CORREO == */

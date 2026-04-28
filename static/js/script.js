@@ -2,6 +2,8 @@
 let todosLosCorreos = [];       // Lista completa de correos de la categoría activa
 let categoriaActiva = 'principal';
 let tipoFeedback    = 'spam';
+let _modoEliminar  = { spam: false, ham: false };
+let _seleccionados = { spam: new Set(), ham: new Set() };
 let intervaloAuto   = null;     // Referencia al setInterval del polling
 let _mapaCorreos    = {};       // Índice id→correo para acceso rápido al abrir un modal
 let _fpmTipo        = 'spam';
@@ -391,8 +393,8 @@ async function cargarStats() {
   try {
     const r = await fetch('/api/stats');
     const d = await r.json();
-    const sc = document.getElementById('teach-spam-count');
-    const hc = document.getElementById('teach-ham-count');
+    const sc = document.getElementById('count-spam');
+    const hc = document.getElementById('count-ham');
     if (sc) sc.textContent = d.correcciones_spam ?? 0;
     if (hc) hc.textContent = d.correcciones_ham  ?? 0;
   } catch {}
@@ -686,15 +688,46 @@ function mostrarResultado(d) {
  */
 function selTipo(tipo) {
   tipoFeedback = tipo;
-  document.getElementById('btn-spam-tipo').classList.toggle('sel', tipo === 'spam');
-  document.getElementById('btn-ham-tipo').classList.toggle('sel',  tipo === 'ham');
+  const bsp = document.getElementById('btn-spam-tipo');
+  const bha = document.getElementById('btn-ham-tipo');
+  if (bsp) bsp.classList.toggle('sel', tipo === 'spam');
+  if (bha) bha.classList.toggle('sel',  tipo === 'ham');
 }
 
+
+
 /**
- * @brief Envía las palabras clave del campo de feedback al servidor y recarga la lista de correcciones.
+ * @brief Carga las correcciones desde el servidor y actualiza la UI y localStorage.
  */
-async function enviarFeedback() {
-  const campo   = document.getElementById('fb-palabra');
+async function cargarChips() {
+  try {
+    const r = await fetch('/api/correcciones');
+    const d = await r.json();
+    renderChips('spam', d.spam || []);
+    renderChips('ham',  d.ham  || []);
+    guardarCorreccionesLocal(d.spam || [], d.ham || []);
+  } catch {}
+}
+
+function renderChips(tipo, palabras) {
+  const area  = document.getElementById('chips-' + tipo);
+  const count = document.getElementById('count-' + tipo);
+  if (!area) return;
+  if (count) count.textContent = palabras.length;
+  if (!palabras.length) {
+    area.innerHTML = `<span class="teach-empty" id="empty-${tipo}">Sin palabras aún.</span>`;
+    return;
+  }
+  const modo = _modoEliminar[tipo];
+  const sel  = _seleccionados[tipo];
+  area.innerHTML = palabras.map(p => {
+    const cls = modo ? (sel.has(p) ? 'teach-chip sel' : 'teach-chip dimmed') : 'teach-chip';
+    return `<span class="${cls}" onclick="chipClick('${tipo}','${esc(p)}')">${esc(p)}</span>`;
+  }).join('');
+}
+
+async function agregarPalabra(tipo) {
+  const campo   = document.getElementById('teach-input-' + tipo);
   const entrada = campo.value.trim();
   if (!entrada) { mostrarToast('Escribe una palabra primero.'); return; }
   const palabras = entrada.split(',').map(p => p.trim()).filter(p => p.length > 2);
@@ -703,7 +736,7 @@ async function enviarFeedback() {
     const r = await fetch('/api/feedback', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ palabras, tipo: tipoFeedback })
+      body: JSON.stringify({ palabras, tipo })
     });
     const d = await r.json();
     mostrarToast(d.mensaje || 'Guardado.');
@@ -715,123 +748,51 @@ async function enviarFeedback() {
   }
 }
 
-/**
- * @brief Carga las correcciones desde el servidor y actualiza la UI y localStorage.
- */
-async function cargarChips() {
-  try {
-    const r = await fetch('/api/correcciones');
-    const d = await r.json();
-    renderListaCorrecciones('spam', d.spam || []);
-    renderListaCorrecciones('ham',  d.ham  || []);
-    const sc = document.getElementById('teach-spam-count');
-    const hc = document.getElementById('teach-ham-count');
-    if (sc) sc.textContent = (d.spam || []).length;
-    if (hc) hc.textContent = (d.ham  || []).length;
-    guardarCorreccionesLocal(d.spam || [], d.ham || []);
-  } catch {}
-}
-
-/**
- * @brief Renderiza la lista de palabras de corrección de un tipo en su contenedor HTML.
- * @param {string} tipo    'spam' o 'ham'.
- * @param {Array}  palabras Lista de palabras a mostrar.
- */
-function renderListaCorrecciones(tipo, palabras) {
-  const lista  = document.getElementById('lista-' + tipo);
-  const empty  = document.getElementById('empty-' + tipo);
-  const count  = document.getElementById('count-' + tipo + '-label');
-  if (count) count.textContent = palabras.length;
-  if (!palabras.length) {
-    lista.innerHTML = '';
-    if (empty) { lista.appendChild(empty); empty.style.display = 'block'; }
-    return;
+function chipClick(tipo, palabra) {
+  if (!_modoEliminar[tipo]) return;
+  const sel = _seleccionados[tipo];
+  if (sel.has(palabra)) sel.delete(palabra); else sel.add(palabra);
+  const btn = document.getElementById('del-btn-' + tipo);
+  if (btn) {
+    if (sel.size > 0) { btn.textContent = `Confirmar (${sel.size})`; btn.classList.add('confirmar'); }
+    else              { btn.textContent = 'Cancelar';                  btn.classList.remove('confirmar'); }
   }
-  if (empty) empty.style.display = 'none';
-  lista.innerHTML = palabras.map(p => crearItemHTML(p, tipo)).join('');
+  document.querySelectorAll(`#chips-${tipo} .teach-chip`).forEach(c => {
+    c.className = sel.has(c.textContent) ? 'teach-chip sel' : 'teach-chip dimmed';
+  });
 }
 
-/**
- * @brief Genera el HTML de un ítem de corrección con sus botones de editar y eliminar.
- * @param {string} palabra Palabra de la corrección.
- * @param {string} tipo    'spam' o 'ham'.
- * @return {string} HTML del elemento de lista.
- */
-function crearItemHTML(palabra, tipo) {
-  return `<li class="correccion-item" id="item-${tipo}-${esc(palabra)}">
-    <span class="correccion-palabra">${esc(palabra)}</span>
-    <div class="correccion-acciones">
-      <button class="btn-icon editar"   onclick="iniciarEdicion('${esc(palabra)}','${tipo}')">✏️</button>
-      <button class="btn-icon eliminar" onclick="eliminarCorreccion('${esc(palabra)}','${tipo}')">🗑️</button>
-    </div>
-  </li>`;
+function toggleModoEliminar(tipo) {
+  const btn  = document.getElementById('del-btn-' + tipo);
+  const modo = _modoEliminar[tipo];
+  if (modo && _seleccionados[tipo].size > 0) { confirmarEliminar(tipo); return; }
+  _modoEliminar[tipo]  = !modo;
+  _seleccionados[tipo] = new Set();
+  if (btn) {
+    if (_modoEliminar[tipo]) { btn.textContent = 'Cancelar'; btn.classList.add('modo-eliminar'); btn.classList.remove('confirmar'); }
+    else                     { btn.textContent = 'Eliminar'; btn.classList.remove('modo-eliminar', 'confirmar'); }
+  }
+  fetch('/api/correcciones').then(r => r.json()).then(d => renderChips(tipo, d[tipo] || [])).catch(() => {});
 }
 
-/**
- * @brief Reemplaza el ítem de una corrección por un campo de edición inline.
- * @param {string} palabra Palabra a editar.
- * @param {string} tipo    'spam' o 'ham'.
- */
-function iniciarEdicion(palabra, tipo) {
-  const item = document.getElementById('item-' + tipo + '-' + palabra);
-  if (!item) return;
-  item.innerHTML = `
-    <input class="correccion-input" id="input-edicion-${tipo}-${esc(palabra)}" value="${esc(palabra)}"
-           onkeydown="if(event.key==='Enter')guardarEdicion('${esc(palabra)}','${tipo}');if(event.key==='Escape')cancelarEdicion('${esc(palabra)}','${tipo}')">
-    <div class="correccion-acciones">
-      <button class="btn-icon guardar"  onclick="guardarEdicion('${esc(palabra)}','${tipo}')">✅</button>
-      <button class="btn-icon cancelar" onclick="cancelarEdicion('${esc(palabra)}','${tipo}')">✕</button>
-    </div>`;
-  document.getElementById('input-edicion-' + tipo + '-' + palabra)?.focus();
-}
-
-/**
- * @brief Descarta la edición en curso y restaura el ítem a su vista original.
- * @param {string} palabra Palabra cuya edición se cancela.
- * @param {string} tipo    'spam' o 'ham'.
- */
-function cancelarEdicion(palabra, tipo) {
-  const item = document.getElementById('item-' + tipo + '-' + palabra);
-  if (item) item.outerHTML = crearItemHTML(palabra, tipo);
-}
-
-/**
- * @brief Guarda el nuevo valor de una corrección editada y actualiza la lista en el servidor.
- * @param {string} anterior Palabra original antes de la edición.
- * @param {string} tipo     'spam' o 'ham'.
- */
-async function guardarEdicion(anterior, tipo) {
-  const input = document.getElementById('input-edicion-' + tipo + '-' + anterior);
-  if (!input) return;
-  const nueva = input.value.toLowerCase().trim();
-  if (!nueva || nueva === anterior) { cancelarEdicion(anterior, tipo); return; }
+async function confirmarEliminar(tipo) {
+  const palabras = [..._seleccionados[tipo]];
+  if (!palabras.length) return;
   try {
-    const r = await fetch('/api/correcciones/editar', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ palabra_anterior: anterior, palabra_nueva: nueva, tipo })
-    });
-    const d = await r.json();
-    mostrarToast(d.mensaje);
-    cargarChips(); cargarStats();
-  } catch { mostrarToast('Error.'); cancelarEdicion(anterior, tipo); }
-}
-
-/**
- * @brief Elimina una palabra de corrección del servidor tras confirmación del usuario.
- * @param {string} palabra Palabra a eliminar.
- * @param {string} tipo    'spam' o 'ham'.
- */
-async function eliminarCorreccion(palabra, tipo) {
-  if (!confirm(`¿Eliminar "${palabra}" de ${tipo.toUpperCase()}?`)) return;
-  try {
-    const r = await fetch('/api/correcciones/eliminar', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ palabra, tipo })
-    });
-    const d = await r.json();
-    mostrarToast(d.mensaje);
-    cargarChips(); cargarStats();
-  } catch { mostrarToast('Error.'); }
+    await Promise.all(palabras.map(p =>
+      fetch('/api/correcciones/eliminar', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ palabra: p, tipo })
+      })
+    ));
+    const n = palabras.length;
+    mostrarToast(`${n} palabra${n > 1 ? 's' : ''} eliminada${n > 1 ? 's' : ''}.`);
+  } catch { mostrarToast('Error al eliminar.'); }
+  _modoEliminar[tipo]  = false;
+  _seleccionados[tipo] = new Set();
+  const btn = document.getElementById('del-btn-' + tipo);
+  if (btn) { btn.textContent = 'Eliminar'; btn.classList.remove('modo-eliminar', 'confirmar'); }
+  cargarChips(); cargarStats();
 }
 
 /**

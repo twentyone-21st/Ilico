@@ -22,7 +22,7 @@
     <symbol id="ico-archive" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
     <symbol id="ico-warn" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
     <symbol id="ico-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
-    <symbol id="ico-teach" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></symbol>
+    <symbol id="ico-teach" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></symbol>
     <symbol id="ico-bug" viewBox="0 0 24 24"><path d="M8 2l1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 4-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17 17c2.3.1 4 1.9 4 4"/></symbol>
   </svg>
 
@@ -199,58 +199,41 @@
       <section id="sec-aprender" class="section">
         <div class="feedback-panel">
           <div class="panel-title">Enseñar al sistema</div>
-          <div class="panel-sub">Agrega, edita o elimina palabras clave para afinar las clasificaciones en tiempo real.</div>
+          <div class="panel-sub">Agrega o elimina palabras clave para afinar las clasificaciones en tiempo real.</div>
 
-          <!-- Formulario para añadir nuevas palabras de corrección -->
-          <div class="feedback-form">
-            <input type="text" id="fb-palabra" placeholder="Escribe una palabra clave..." onkeydown="if(event.key==='Enter')enviarFeedback()">
-            <div class="tipo-select">
-              <button class="tipo-btn spam" id="btn-spam-tipo" onclick="selTipo('spam')">SPAM</button>
-              <button class="tipo-btn ham"  id="btn-ham-tipo"  onclick="selTipo('ham')">HAM</button>
-            </div>
-            <button class="btn btn-primary" onclick="enviarFeedback()">Agregar</button>
-          </div>
-
-          <!-- Resumen de totales de palabras enseñadas -->
-          <div class="feedback-resumen">
-            <div class="feedback-resumen-item">
-              <span class="feedback-resumen-label">Palabras SPAM enseñadas</span>
-              <span class="feedback-resumen-value spam" id="teach-spam-count">0</span>
-            </div>
-            <div class="feedback-resumen-item">
-              <span class="feedback-resumen-label">Palabras HAM enseñadas</span>
-              <span class="feedback-resumen-value ham" id="teach-ham-count">0</span>
-            </div>
-          </div>
-
-          <!-- Listas editables de palabras SPAM y HAM -->
-          <div class="correcciones-seccion">
-            <div class="correcciones-grid">
-              <div class="correcciones-grupo">
-                <div class="correcciones-grupo-header">
-                  <div class="correcciones-grupo-title">
-                    <span>🚫</span>
-                    <span style="color:var(--spam)">Palabras SPAM</span>
-                  </div>
-                  <span class="correcciones-grupo-count count-spam" id="count-spam-label">0</span>
-                </div>
-                <ul class="correcciones-lista" id="lista-spam">
-                  <li class="correcciones-empty" id="empty-spam">Aún no has agregado palabras de SPAM.</li>
-                </ul>
+          <div class="teach-wrap">
+            <!-- Panel SPAM -->
+            <div class="teach-col">
+              <div class="teach-panel-head">
+                <span class="teach-panel-title">SPAM</span>
+                <span class="teach-count" id="count-spam">0</span>
               </div>
-
-              <div class="correcciones-grupo">
-                <div class="correcciones-grupo-header">
-                  <div class="correcciones-grupo-title">
-                    <span>✅</span>
-                    <span style="color:var(--ham)">Palabras HAM</span>
-                  </div>
-                  <span class="correcciones-grupo-count count-ham" id="count-ham-label">0</span>
-                </div>
-                <ul class="correcciones-lista" id="lista-ham">
-                  <li class="correcciones-empty" id="empty-ham">Aún no has agregado palabras de HAM.</li>
-                </ul>
+              <div class="teach-divider"></div>
+              <div class="teach-chips-area" id="chips-spam">
+                <span class="teach-empty" id="empty-spam">Sin palabras aún.</span>
               </div>
+              <div class="teach-input-row">
+                <input class="teach-input" id="teach-input-spam" placeholder="Palabra clave..." onkeydown="if(event.key==='Enter')agregarPalabra('spam')">
+                <button class="teach-btn-add" onclick="agregarPalabra('spam')">Agregar</button>
+              </div>
+              <button class="teach-btn-del" id="del-btn-spam" onclick="toggleModoEliminar('spam')">Eliminar</button>
+            </div>
+
+            <!-- Panel HAM -->
+            <div class="teach-col">
+              <div class="teach-panel-head">
+                <span class="teach-panel-title">HAM</span>
+                <span class="teach-count" id="count-ham">0</span>
+              </div>
+              <div class="teach-divider"></div>
+              <div class="teach-chips-area" id="chips-ham">
+                <span class="teach-empty" id="empty-ham">Sin palabras aún.</span>
+              </div>
+              <div class="teach-input-row">
+                <input class="teach-input" id="teach-input-ham" placeholder="Palabra clave..." onkeydown="if(event.key==='Enter')agregarPalabra('ham')">
+                <button class="teach-btn-add" onclick="agregarPalabra('ham')">Agregar</button>
+              </div>
+              <button class="teach-btn-del" id="del-btn-ham" onclick="toggleModoEliminar('ham')">Eliminar</button>
             </div>
           </div>
         </div>

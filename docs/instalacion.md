@@ -11,8 +11,8 @@
 ## 1. Clonar el repositorio
 
 ```bash
-git clone https://github.com/twentyone-21st/ilico_app.git
-cd ilico_app
+git clone https://github.com/twentyone-21st/Ilico.git
+cd Ilico
 ```
 
 ## 2. Instalar dependencias

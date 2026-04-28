@@ -1,6 +1,6 @@
 # Arquitectura del sistema
 
-Ilico sigue una arquitectura cliente-servidor clásica con tres módulos Python en el backend y una interfaz de usuario de página única (SPA) en el frontend.
+Ilico sigue una arquitectura cliente-servidor clásica con cuatro módulos Python en el backend y una interfaz de usuario de página única (SPA) en el frontend.
 
 ---
 
@@ -16,6 +16,8 @@ Navegador (script.js)
         │       │
         │   modelo_spam.pkl  (TF-IDF + Naive Bayes)
         │
+        ├── security_service.py  (SPF/DKIM/DMARC + Safe Browsing)
+        │
         └── correcciones_usuario.json  (palabras del usuario)
 ```
 
@@ -27,7 +29,7 @@ Es el punto de entrada de la aplicación. Sus responsabilidades son:
 
 - Servir la interfaz HTML mediante la ruta `GET /`
 - Gestionar el flujo OAuth2 con Google (`/auth/gmail`, `/auth/callback`, `/auth/logout`)
-- Mantener un **cache en memoria** de dos categorías de correos (`principal` y `archivados`) con TTL de 5 minutos
+- Mantener un **cache en memoria** de tres categorías de correos (`principal`, `archivados` y `cuarentena`) con TTL de 5 minutos
 - Exponer la **API REST** que consume el frontend
 - Arrancar el modelo en un **hilo daemon** al iniciar, sin bloquear la primera respuesta
 - Cargar y persistir las **palabras de corrección** del usuario en `correcciones_usuario.json`
@@ -85,11 +87,17 @@ Si el dominio es confiable, analiza la intención del contenido:
 ### Capa 3: Modelo NLP
 Usa el pipeline TF-IDF + Naive Bayes entrenado. Las probabilidades se ajustan con las palabras que el usuario ha enseñado al sistema (+15 % por cada palabra coincidente, máximo 45 %).
 
+Cada resultado incluye un campo `descripcion` con una explicación en lenguaje natural de por qué el sistema llegó a su conclusión.
+
 ---
 
-## app.py — Comportamiento tras nuevo deploy
+## security_service.py — Análisis de seguridad
 
-Al arrancar el servidor, `app.py` comprueba si existe un `token.json` cuya fecha de creación sea anterior al inicio del proceso actual. Si es así, lo elimina automáticamente. Esto garantiza que tras cada nuevo deploy en Railway el usuario sea redirigido a iniciar sesión, evitando estados inconsistentes donde la app aparece autenticada pero con la memoria vacía.
+Se ejecuta sobre cada lote de correos clasificados y añade el campo `seguridad` a cada uno:
+
+- **Autenticación**: extrae el resultado de SPF, DKIM y DMARC de los headers del correo
+- **URLs**: extrae hasta 20 URLs del cuerpo del correo y las verifica contra Google Safe Browsing API v4 en una sola llamada batch
+- **Nivel**: calcula un nivel consolidado (`peligro`, `advertencia` o `seguro`) combinando los fallos de autenticación, las amenazas de URL y la clasificación del modelo
 
 ---
 
@@ -97,7 +105,8 @@ Al arrancar el servidor, `app.py` comprueba si existe un `token.json` cuya fecha
 
 Gestiona toda la comunicación con la Gmail API v1:
 
-- **OAuth2**: carga, refresco y persistencia del token en `token.json`
+- **OAuth2**: crea el flujo de autorización y renueva el token automáticamente si está vencido
 - **Descarga paralela**: usa `ThreadPoolExecutor` con 5 hilos para obtener los detalles de múltiples correos simultáneamente
 - **Parseo MIME**: extrae asunto, remitente, fecha, texto plano y HTML del payload anidado
 - **Ordenación cronológica**: convierte las fechas RFC-2822 a Unix timestamp y ordena del más reciente al más antiguo
+- **Acciones**: archiva, desarchiva, mueve a cuarentena, restaura y elimina correos mediante la modificación de etiquetas de Gmail

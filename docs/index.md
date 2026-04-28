@@ -24,8 +24,9 @@ Ilico se conecta a tu cuenta de Gmail mediante OAuth2 y clasifica automáticamen
 - **Reglas inteligentes** por dominio: bancos dominicanos y servicios globales de confianza
 - **Detección de estafas** mediante patrones léxicos de alto riesgo
 - **Correcciones del usuario con prioridad absoluta**: el feedback del usuario nunca es ignorado por el sistema
+- **Clasificación manual de textos** con descripción explicativa de por qué el sistema llegó a su conclusión
+- **Análisis de seguridad** por correo: SPF/DKIM/DMARC y verificación de URLs con Google Safe Browsing
 - **Panel en tiempo real** con polling automático cada 5 segundos
-- **Nivel de confianza** visual por correo (Arriesgado → Seguro)
 - **Sesión limpia tras cada deploy**: Railway cierra la sesión automáticamente al publicar cambios
 
 ---
@@ -46,14 +47,16 @@ Deploy    Railway · Docker · Gunicorn
 
 ```
 ilico_app/
-├── app.py              # Servidor Flask y API REST
-├── classifier.py       # Motor de clasificación NLP
-├── gmail_service.py    # Integración con la Gmail API
-├── requirements.txt    # Dependencias de producción
-├── Dockerfile          # Imagen Docker para Railway
+├── app.py                # Servidor Flask y API REST
+├── classifier.py         # Motor de clasificación NLP
+├── gmail_service.py      # Integración con la Gmail API
+├── security_service.py   # Análisis SPF/DKIM/DMARC y Safe Browsing
+├── requirements.txt      # Dependencias de producción
+├── Dockerfile            # Imagen Docker para Railway/Cloud Run
+├── railway.json          # Configuración de despliegue en Railway
 ├── static/
-│   ├── css/style.css   # Estilos del panel
-│   └── js/script.js    # Lógica del frontend
+│   ├── css/style.css     # Estilos del panel
+│   └── js/script.js      # Lógica del frontend
 └── templates/
-    └── index.html      # Plantilla principal
+    └── index.html        # Plantilla principal
 ```

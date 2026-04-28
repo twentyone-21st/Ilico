@@ -274,6 +274,79 @@ def _es_estafa_coercion_alto_riesgo(texto: str) -> bool:
     return False
 
 
+def _extraer_palabras_estafa(texto: str) -> list:
+    t = _normalizar_busqueda(texto)
+    pide_datos = [
+        "datos bancarios", "datos de tu tarjeta", "datos de la tarjeta",
+        "tarjeta de credito", "tarjeta de debito", "tarjetas de debito",
+        "tarjetas de credito", "todas tus tarjetas", "clave del cajero",
+        "pin de tu tarjeta", "cvv", "codigo de seguridad de tu tarjeta",
+        "cuenta bancaria y clave", "compartes todos tus datos",
+        "envia los datos de", "envia tu clave",
+    ]
+    amenaza = [
+        "homicidio", "demanda", "denunciare", "te denunciare", "denuncia penal",
+        "extorsion", "secuestro", "carcel", "multa", "evitar una posible",
+        "consecuencias legales", "si no pagas", "pagar o", "testimonio falso",
+    ]
+    directa = [
+        "actualice sus datos bancarios o su cuenta sera cancelada",
+        "verifique su cuenta urgente ingrese su clave",
+        "gano rd$", "gane rd$",
+    ]
+    matches = []
+    for p in pide_datos + amenaza + directa:
+        if p in t:
+            matches.append({"palabra": p, "tipo": "spam"})
+    return matches[:7]
+
+
+def _extraer_keywords_nlp(texto: str, modelo, clas: str, top_n: int = 6) -> list:
+    try:
+        tfidf   = modelo.named_steps['tfidf']
+        nb      = modelo.named_steps['nb']
+        clases  = list(nb.classes_)
+        X       = tfidf.transform([preprocesar(texto)])
+        feat    = tfidf.get_feature_names_out()
+        _, cols = X.nonzero()
+        if not len(cols):
+            return []
+        if clas == "SPAM":
+            i_t, i_o = clases.index("spam"), clases.index("ham")
+            scored = sorted(
+                ((nb.feature_log_prob_[i_t, fi] - nb.feature_log_prob_[i_o, fi], fi) for fi in cols),
+                reverse=True
+            )
+            return [{"palabra": str(feat[fi]), "tipo": "spam"}
+                    for _, fi in scored[:top_n] if len(str(feat[fi])) > 2]
+        if clas == "HAM":
+            i_t, i_o = clases.index("ham"), clases.index("spam")
+            scored = sorted(
+                ((nb.feature_log_prob_[i_t, fi] - nb.feature_log_prob_[i_o, fi], fi) for fi in cols),
+                reverse=True
+            )
+            return [{"palabra": str(feat[fi]), "tipo": "ham"}
+                    for _, fi in scored[:top_n] if len(str(feat[fi])) > 2]
+        # SOSPECHOSO: mezcla spam-leaning + ham-leaning
+        i_spam, i_ham = clases.index("spam"), clases.index("ham")
+        scored = sorted(
+            ((nb.feature_log_prob_[i_spam, fi] - nb.feature_log_prob_[i_ham, fi], fi) for fi in cols),
+            reverse=True
+        )
+        result = []
+        for diff, fi in scored[:3]:
+            word = str(feat[fi])
+            if diff > 0 and len(word) > 2:
+                result.append({"palabra": word, "tipo": "spam"})
+        for diff, fi in scored[-3:]:
+            word = str(feat[fi])
+            if diff < 0 and len(word) > 2:
+                result.append({"palabra": word, "tipo": "ham"})
+        return result
+    except Exception:
+        return []
+
+
 def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
                remitente: str = "") -> dict:
     """
@@ -290,7 +363,7 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
         return {
             "clasificacion": "INDETERMINADO", "confianza": 0,
             "prob_spam": 0, "prob_ham": 0, "ajustado": False,
-            "razon": "Mensaje vacío"
+            "razon": "Mensaje vacío", "palabras_clave": []
         }
 
     # Capa 0: las correcciones del usuario tienen prioridad absoluta sobre cualquier otra regla
@@ -309,6 +382,7 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
             "prob_ham_f":    conf,
             "ajustado":      True,
             "razon":         f"Corrección del usuario ({hits_ham} palabra(s) HAM)",
+            "palabras_clave": [{"palabra": w, "tipo": "ham"} for w in ham_usr if w in texto_l],
         }
     if hits_spam > 0 and hits_spam > hits_ham:
         conf = min(98.0, 70.0 + hits_spam * 10.0)
@@ -321,6 +395,7 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
             "prob_ham_f":    round(100.0 - conf, 1),
             "ajustado":      True,
             "razon":         f"Corrección del usuario ({hits_spam} palabra(s) SPAM)",
+            "palabras_clave": [{"palabra": w, "tipo": "spam"} for w in spam_usr if w in texto_l],
         }
 
     # Capa 1: detección de estafas de alto riesgo por patrones léxicos
@@ -334,6 +409,7 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
             "prob_ham_f":    4.0,
             "ajustado":      False,
             "razon":         "Patrón de estafa o coerción (datos sensibles + amenaza)",
+            "palabras_clave": _extraer_palabras_estafa(texto),
         }
 
     # Capa 2: reglas por dominio confiable + análisis de intención
@@ -352,7 +428,8 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
                 "prob_spam_f":   2.0,
                 "prob_ham_f":    98.0,
                 "ajustado":      False,
-                "razon":         f"Dominio de confianza ({tipo_dom}) + contenido transaccional"
+                "razon":         f"Dominio de confianza ({tipo_dom}) + contenido transaccional",
+                "palabras_clave": [{"palabra": p, "tipo": "ham"} for p in PALABRAS_TRANSACCIONAL if p in texto_l][:6],
             }
         elif intencion == "promocional":
             return {
@@ -363,7 +440,8 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
                 "prob_spam_f":   35.0,
                 "prob_ham_f":    65.0,
                 "ajustado":      False,
-                "razon":         f"Dominio de confianza ({tipo_dom}) + contenido promocional"
+                "razon":         f"Dominio de confianza ({tipo_dom}) + contenido promocional",
+                "palabras_clave": [{"palabra": p, "tipo": "sosp"} for p in PALABRAS_PROMOCIONAL if p in texto_l][:6],
             }
         else:
             return {
@@ -374,7 +452,8 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
                 "prob_spam_f":   15.0,
                 "prob_ham_f":    85.0,
                 "ajustado":      False,
-                "razon":         f"Dominio de confianza ({tipo_dom})"
+                "razon":         f"Dominio de confianza ({tipo_dom})",
+                "palabras_clave": [{"palabra": dominio, "tipo": "ham"}] if dominio else [],
             }
 
     # Capa 3: predicción del modelo NLP con ajuste por palabras del usuario
@@ -402,7 +481,8 @@ def clasificar(texto: str, modelo, spam_usr: list, ham_usr: list,
         "prob_spam_f":   round(p_spam_f * 100, 1),
         "prob_ham_f":    round(p_ham_f  * 100, 1),
         "ajustado":      ajustado,
-        "razon":         "Modelo NLP" + (" + correcciones del usuario" if ajustado else "")
+        "razon":         "Modelo NLP" + (" + correcciones del usuario" if ajustado else ""),
+        "palabras_clave": _extraer_keywords_nlp(texto, modelo, clas),
     }
 
 

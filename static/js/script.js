@@ -1,4 +1,5 @@
 // == ESTADO GLOBAL ==
+let csrfToken       = '';       // Token CSRF para peticiones POST
 let todosLosCorreos = [];       // Lista completa de correos de la categoría activa
 let categoriaActiva = 'principal';
 let tipoFeedback    = 'spam';
@@ -12,8 +13,37 @@ let _cargandoFondo  = false;
 let _correosLeidos  = new Set(JSON.parse(localStorage.getItem('ilico_leidos') || '[]'));
 let _ctxCorreoId    = null;   // ID del correo sobre el que se abrió el menú contextual
 
+async function getCSRFToken() {
+  try {
+    const r = await fetch('/api/csrf-token');
+    const d = await r.json();
+    csrfToken = d.csrf_token || '';
+  } catch {}
+}
+
+async function fetchPost(url, data = null) {
+  const options = { method: 'POST', headers: { 'X-CSRFToken': csrfToken } };
+  if (data !== null) {
+    options.headers['Content-Type'] = 'application/json';
+    options.body = JSON.stringify(data);
+  }
+  let r = await fetch(url, options);
+  if (r.status === 400) {
+    try {
+      const body = await r.clone().json();
+      if (body.code === 'csrf_expired') {
+        await getCSRFToken();
+        options.headers['X-CSRFToken'] = csrfToken;
+        r = await fetch(url, options);
+      }
+    } catch {}
+  }
+  return r;
+}
+
 // == INICIALIZACIÓN ==
 document.addEventListener('DOMContentLoaded', async () => {
+  await getCSRFToken();
   cargarPerfil();
   cargarStats();
   await sincronizarCorreccionesAlServidor();
@@ -108,11 +138,7 @@ async function sincronizarCorreccionesAlServidor() {
   try {
     const data = JSON.parse(raw);
     if (!data.spam?.length && !data.ham?.length) return;
-    await fetch('/api/correcciones/sincronizar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
-    });
+    await fetchPost('/api/correcciones/sincronizar', data);
   } catch {}
 }
 
@@ -622,11 +648,7 @@ async function clasificarTexto() {
   });
 
   try {
-    const r = await fetch('/api/clasificar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ texto })
-    });
+    const r = await fetchPost('/api/clasificar', { texto });
     const d = await r.json();
     mostrarResultado(d);
   } catch {
@@ -733,11 +755,7 @@ async function agregarPalabra(tipo) {
   const palabras = entrada.split(',').map(p => p.trim()).filter(p => p.length > 2);
   if (!palabras.length) { mostrarToast('Escribe palabras de al menos 3 caracteres.'); return; }
   try {
-    const r = await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ palabras, tipo })
-    });
+    const r = await fetchPost('/api/feedback', { palabras, tipo });
     const d = await r.json();
     mostrarToast(d.mensaje || 'Guardado.');
     campo.value = '';
@@ -780,10 +798,7 @@ async function confirmarEliminar(tipo) {
   if (!palabras.length) return;
   try {
     await Promise.all(palabras.map(p =>
-      fetch('/api/correcciones/eliminar', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ palabra: p, tipo })
-      })
+      fetchPost('/api/correcciones/eliminar', { palabra: p, tipo })
     ));
     const n = palabras.length;
     mostrarToast(`${n} palabra${n > 1 ? 's' : ''} eliminada${n > 1 ? 's' : ''}.`);
@@ -956,15 +971,11 @@ async function fpmGuardar() {
   if (!palabras.length) { mostrarToast('Palabras demasiado cortas.'); return; }
 
   try {
-    const r = await fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        palabras,
-        tipo:             _fpmTipo,
-        texto_clasificar: window._fpmTexto || '',
-        correo_id:        _fpmCorreoId,
-      })
+    const r = await fetchPost('/api/feedback', {
+      palabras,
+      tipo:             _fpmTipo,
+      texto_clasificar: window._fpmTexto || '',
+      correo_id:        _fpmCorreoId,
     });
     const d = await r.json();
     document.getElementById('fpm-correccion').classList.remove('visible');
@@ -1127,7 +1138,7 @@ function _cerrarCtxMenu() {
  */
 async function _accionCorreo(id, url, toastMsg) {
   try {
-    const r = await fetch(url, { method: 'POST' });
+    const r = await fetchPost(url);
     if (!r.ok) { mostrarToast('Error al ejecutar la acción.'); return; }
     todosLosCorreos = todosLosCorreos.filter(c => String(c.id) !== String(id));
     renderTabla(todosLosCorreos);
@@ -1146,10 +1157,8 @@ async function _restaurarCorreo(id) {
   await _accionCorreo(id, `/api/correo/${id}/restaurar`, 'Correo restaurado a Principal.');
   const cache = _mapaCorreos[id];
   if (cache && cache.texto_clasificar) {
-    fetch('/api/feedback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ palabras: [], tipo: 'ham', texto_clasificar: cache.texto_clasificar, correo_id: id })
+    fetchPost('/api/feedback', {
+      palabras: [], tipo: 'ham', texto_clasificar: cache.texto_clasificar, correo_id: id
     }).catch(() => {});
   }
 }
@@ -1168,11 +1177,7 @@ async function limpiarBandeja() {
   if (btn) { btn.disabled = true; btn.textContent = 'Limpiando...'; }
 
   try {
-    const r = await fetch('/api/correos/limpiar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ids: candidatos.map(c => c.id) })
-    });
+    const r = await fetchPost('/api/correos/limpiar', { ids: candidatos.map(c => c.id) });
     const d = await r.json();
     if (d.ok) {
       const ids = new Set(candidatos.map(c => String(c.id)));

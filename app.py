@@ -10,6 +10,10 @@ import time
 from datetime import timedelta
 from pathlib import Path
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session
+from flask_talisman import Talisman
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_wtf.csrf import CSRFProtect, CSRFError
 
 from classifier import entrenar_modelo, clasificar, MODEL_CACHE
 from security_service import analizar_lote
@@ -34,6 +38,63 @@ app.config.update(
     SESSION_COOKIE_SAMESITE     = "Lax",
     SESSION_COOKIE_SECURE       = _en_produccion,  # HTTPS solo en Railway
 )
+
+app.config['MAX_CONTENT_LENGTH'] = 1 * 1024 * 1024  # 1 MB
+
+_csp = {
+    'default-src': "'self'",
+    'script-src':  "'self' 'unsafe-inline'",
+    'style-src':   "'self' 'unsafe-inline' https://fonts.googleapis.com",
+    'font-src':    "'self' https://fonts.gstatic.com data:",
+    'img-src':     "'self' data: https: blob:",
+    'frame-src':   "'self'",
+    'connect-src': "'self'",
+}
+Talisman(
+    app,
+    force_https=_en_produccion,
+    strict_transport_security=True,
+    strict_transport_security_max_age=31536000,
+    content_security_policy=_csp,
+    referrer_policy='strict-origin-when-cross-origin',
+    x_content_type_options=True,
+    frame_options='SAMEORIGIN',
+    session_cookie_secure=_en_produccion,
+    session_cookie_http_only=True,
+)
+
+limiter = Limiter(
+    key_func=get_remote_address,
+    app=app,
+    storage_uri="memory://",
+    default_limits=[],
+)
+
+csrf = CSRFProtect(app)
+app.config['WTF_CSRF_TIME_LIMIT'] = None
+app.config['WTF_CSRF_SSL_STRICT'] = True
+
+
+@app.errorhandler(429)
+def demasiadas_peticiones(e):
+    """@brief Handler JSON para rate limiting (HTTP 429)."""
+    return jsonify({"error": "Demasiadas peticiones. Espera un momento antes de intentarlo de nuevo."}), 429
+
+
+@app.errorhandler(413)
+def contenido_muy_grande(e):
+    """@brief Handler JSON para payloads demasiado grandes (HTTP 413)."""
+    return jsonify({"error": "El contenido enviado es demasiado grande (máximo 1 MB)."}), 413
+
+
+@app.errorhandler(CSRFError)
+def csrf_error_handler(e):
+    """@brief Handler JSON para tokens CSRF inválidos o ausentes (HTTP 400)."""
+    return jsonify({
+        "error": "Tu sesión ha expirado o el token de seguridad es inválido. Recarga la página.",
+        "code":  "csrf_expired",
+    }), 400
+
 
 @app.before_request
 def _sesion_permanente():
@@ -352,6 +413,7 @@ def auth_gmail():
 
 
 @app.route("/auth/callback")
+@csrf.exempt
 def auth_callback():
     """
     @brief Recibe el código OAuth de Google, intercambia por token y lo guarda en la sesión del usuario.
@@ -387,6 +449,13 @@ def logout():
     return redirect(url_for("index"))
 
 
+@app.route("/api/csrf-token")
+def api_csrf_token():
+    """@brief Devuelve el token CSRF actual para que el frontend lo incluya en peticiones POST."""
+    from flask_wtf.csrf import generate_csrf
+    return jsonify({"csrf_token": generate_csrf()})
+
+
 @app.route("/api/perfil")
 def api_perfil():
     """
@@ -401,6 +470,7 @@ def api_perfil():
 
 
 @app.route("/api/correos")
+@limiter.limit("60 per minute")
 def api_correos():
     """
     @brief Devuelve los correos clasificados del cache; lanza carga en fondo si el cache está vacío o vencido.
@@ -505,6 +575,7 @@ def api_correos_cache():
 
 
 @app.route("/api/correo/<mensaje_id>")
+@limiter.limit("120 per minute")
 def api_correo_detalle(mensaje_id):
     """
     @brief Devuelve el contenido completo de un correo, fusionando la clasificación del cache si existe.
@@ -545,12 +616,18 @@ def api_correo_detalle(mensaje_id):
 
 
 @app.route("/api/clasificar", methods=["POST"])
+@limiter.limit("30 per minute")
 def api_clasificar():
     """
     @brief Clasifica un texto enviado manualmente por el usuario y devuelve la predicción del modelo.
     """
-    data  = request.get_json(silent=True) or {}
-    texto = data.get("texto", "").strip()
+    data      = request.get_json(silent=True) or {}
+    raw_texto = data.get("texto", "")
+    if not isinstance(raw_texto, str):
+        return jsonify({"error": "El texto debe ser una cadena de caracteres"}), 400
+    texto = raw_texto.strip()
+    if len(texto) > 50000:
+        return jsonify({"error": "El texto excede los 50,000 caracteres permitidos"}), 400
     if not texto:
         return jsonify({"error": "Texto vacío"}), 400
     modelo = _esperar_modelo(timeout=90)
@@ -564,6 +641,7 @@ def api_clasificar():
 
 
 @app.route("/api/feedback", methods=["POST"])
+@limiter.limit("60 per minute")
 def api_feedback():
     """
     @brief Añade palabras clave a la lista de corrección del usuario y guarda el correo como ejemplo de entrenamiento.
@@ -579,10 +657,21 @@ def api_feedback():
 
     raw_palabras = data.get("palabras")
     if isinstance(raw_palabras, list) and raw_palabras:
+        if len(raw_palabras) > 50:
+            return jsonify({"error": "Máximo 50 palabras por petición"}), 400
+        for p in raw_palabras:
+            if not isinstance(p, str) or len(str(p).strip()) > 100:
+                return jsonify({"error": "Cada palabra debe tener máximo 100 caracteres"}), 400
         palabras = [str(p).lower().strip() for p in raw_palabras if len(str(p).strip()) > 2]
     else:
         palabra_unica = str(data.get("palabra", "")).lower().strip()
         palabras = [w.strip() for w in palabra_unica.split(",") if len(w.strip()) > 2]
+
+    texto_fc_raw = data.get("texto_clasificar", "")
+    if not isinstance(texto_fc_raw, str):
+        return jsonify({"error": "texto_clasificar debe ser una cadena de caracteres"}), 400
+    if len(texto_fc_raw) > 50000:
+        return jsonify({"error": "texto_clasificar excede los 50,000 caracteres permitidos"}), 400
 
     if not palabras:
         return jsonify({"error": "Sin palabras válidas"}), 400
@@ -601,7 +690,7 @@ def api_feedback():
 
     _guardar_correcciones()
 
-    texto_fc   = (data.get("texto_clasificar") or "").strip()
+    texto_fc   = texto_fc_raw.strip()
     correo_id  = data.get("correo_id")
     if texto_fc:
         threading.Thread(
@@ -629,6 +718,7 @@ def api_correcciones():
 
 
 @app.route("/api/correcciones/sincronizar", methods=["POST"])
+@limiter.limit("10 per minute")
 def api_sincronizar_correcciones():
     """
     @brief Fusiona las correcciones del localStorage del cliente con las del servidor (por usuario).
@@ -638,9 +728,15 @@ def api_sincronizar_correcciones():
     if not user_id:
         return jsonify({"ok": False, "error": "No autenticado"}), 401
 
-    data = request.get_json(silent=True) or {}
-    spam_new = [str(p).lower().strip() for p in data.get("spam", []) if len(str(p).strip()) > 2]
-    ham_new  = [str(p).lower().strip() for p in data.get("ham",  []) if len(str(p).strip()) > 2]
+    data     = request.get_json(silent=True) or {}
+    spam_raw = data.get("spam", [])
+    ham_raw  = data.get("ham",  [])
+    if not isinstance(spam_raw, list) or not isinstance(ham_raw, list):
+        return jsonify({"ok": False, "error": "spam y ham deben ser listas"}), 400
+    if len(spam_raw) > 500 or len(ham_raw) > 500:
+        return jsonify({"ok": False, "error": "Máximo 500 elementos por lista"}), 400
+    spam_new = [str(p).lower().strip() for p in spam_raw if len(str(p).strip()) <= 100 and len(str(p).strip()) > 2]
+    ham_new  = [str(p).lower().strip() for p in ham_raw  if len(str(p).strip()) <= 100 and len(str(p).strip()) > 2]
 
     if not spam_new and not ham_new:
         spam_usr, ham_usr = _get_correcciones_usuario(user_id)
@@ -663,6 +759,7 @@ def api_sincronizar_correcciones():
 
 
 @app.route("/api/correcciones/eliminar", methods=["POST"])
+@limiter.limit("30 per minute")
 def api_eliminar_correccion():
     """
     @brief Elimina una palabra específica de la lista de correcciones del usuario.
@@ -691,6 +788,7 @@ def api_eliminar_correccion():
 
 
 @app.route("/api/correcciones/editar", methods=["POST"])
+@limiter.limit("30 per minute")
 def api_editar_correccion():
     """
     @brief Reemplaza una palabra de corrección existente por una nueva dentro de la misma categoría.
@@ -869,6 +967,7 @@ def api_stats():
 
 
 @app.route("/api/reentrenar", methods=["POST"])
+@limiter.limit("5 per hour")
 def api_reentrenar():
     """
     @brief Borra el modelo en cache y lanza un reentrenamiento completo en background.
@@ -883,6 +982,7 @@ def api_reentrenar():
 
 
 @app.route("/api/webhook/gmail", methods=["POST"])
+@csrf.exempt
 def webhook_gmail():
     """
     @brief Recibe notificaciones push de Gmail. Sin contexto de usuario en webhooks,

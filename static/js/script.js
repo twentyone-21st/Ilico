@@ -7,7 +7,6 @@ let _mapaCorreos    = {};       // Índice id→correo para acceso rápido al ab
 let _fpmTipo        = 'spam';
 let _fpmCorreoId    = null;
 let _cargandoFondo  = false;
-let _tooltipEl      = null;
 let _correosLeidos  = new Set(JSON.parse(localStorage.getItem('ilico_leidos') || '[]'));
 let _ctxCorreoId    = null;   // ID del correo sobre el que se abrió el menú contextual
 
@@ -19,7 +18,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   cargarChips();
   selTipo('spam');
   prepararLogout();
-  iniciarTooltipNivel();
   cargarDesdeCache();
   _iniciarMenuContextual();
 });
@@ -343,7 +341,7 @@ function resetResultBox() {
   const emptyMsg = document.getElementById('r-empty-msg');
   if (emptyMsg) { emptyMsg.textContent = 'Aún no has introducido un texto para clasificar'; emptyMsg.style.display = ''; }
 
-  ['r-conf', 'r-bar-wrap', 'r-sep', 'r-desc', 'r-tags', 'btn-aceptar'].forEach(id => {
+  ['r-sep', 'r-desc', 'btn-aceptar'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -428,58 +426,6 @@ function mostrarHoraActualizacion() {
   el.textContent = `Última actualización: ${hora}`;
 }
 
-/**
- * @brief Calcula el nivel de confianza visual (0–100 %) y el texto del tooltip según la clasificación.
- * @param {string} clasificacion 'SPAM', 'HAM' o 'SOSPECHOSO'.
- * @param {number} probHam       Probabilidad de ham en porcentaje.
- * @param {number} probSpam      Probabilidad de spam en porcentaje.
- * @return {Object} Objeto con clave (nombre del nivel), pct (porcentaje) y tooltip (descripción).
- */
-function calcularNivel(clasificacion, probHam, probSpam) {
-  let pct;
-  if (clasificacion === 'SPAM')       pct = Math.round(100 - (probSpam || 0));
-  else if (clasificacion === 'HAM')   pct = Math.round(probHam || 0);
-  else                                pct = Math.round(probHam || 50);
-  pct = Math.max(0, Math.min(100, pct));
-
-  if (pct <= 20) return { clave: 'arriesgado',   pct, tooltip: 'Este correo presenta características altamente sospechosas. No interactúes con él.' };
-  if (pct <= 40) return { clave: 'cuestionable', pct, tooltip: 'Este correo tiene indicios de no ser legítimo. Revísalo con precaución.' };
-  if (pct <= 60) return { clave: 'ambiguo',      pct, tooltip: 'El sistema no puede determinar con certeza si este correo es seguro. Revísalo manualmente.' };
-  if (pct <= 80) return { clave: 'fiable',       pct, tooltip: 'Este correo parece legítimo. Verifica el remitente antes de responder.' };
-  return           { clave: 'seguro',        pct, tooltip: 'Este correo fue identificado como completamente legítimo y confiable.' };
-}
-
-/**
- * @brief Crea el elemento tooltip global y registra los listeners de mouse para mostrarlo sobre las barras de nivel.
- */
-function iniciarTooltipNivel() {
-  _tooltipEl = document.createElement('div');
-  _tooltipEl.className = 'nivel-tooltip';
-  document.body.appendChild(_tooltipEl);
-
-  document.addEventListener('mouseover', e => {
-    const wrap = e.target.closest('.nivel-bar-wrap');
-    if (!wrap) return;
-    const txt = wrap.dataset.tooltip;
-    if (!txt) return;
-    _tooltipEl.textContent = txt;
-    _tooltipEl.classList.add('visible');
-  });
-
-  document.addEventListener('mousemove', e => {
-    if (!_tooltipEl.classList.contains('visible')) return;
-    const x = e.clientX + 16;
-    const y = e.clientY - 10;
-    const w = _tooltipEl.offsetWidth;
-    _tooltipEl.style.left = (x + w > window.innerWidth ? e.clientX - w - 16 : x) + 'px';
-    _tooltipEl.style.top  = y + 'px';
-  });
-
-  document.addEventListener('mouseout', e => {
-    if (e.target.closest('.nivel-bar-wrap')) return;
-    _tooltipEl.classList.remove('visible');
-  });
-}
 
 /**
  * @brief Muestra el estado de bandeja vacía con un mensaje contextual según la categoría activa.
@@ -619,23 +565,12 @@ function renderTabla(correos) {
 
   const filas = correos.map(c => {
     const { badge } = badgeInfo(c.clasificacion);
-    const niv       = calcularNivel(c.clasificacion, c.prob_ham, c.prob_spam);
     const dotNuevo = _correosLeidos.has(String(c.id)) ? '' : '<span class="dot-nuevo"></span>';
     return `<tr data-id="${esc(c.id)}" onclick="abrirCorreo(this.dataset.id)">
       <td class="td-asunto" title="${esc(c.asunto)}">${dotNuevo}${esc(c.asunto)}</td>
       <td class="td-remite">${esc(c.remite)}</td>
       <td class="td-fecha">${esc(formatearFechaLocal(c.fecha))}</td>
       <td>${badge}</td>
-      <td class="td-nivel">
-        <div class="nivel-wrap">
-          <div class="nivel-bar-wrap" data-tooltip="${esc(niv.tooltip)}">
-            <div class="nivel-bar">
-              <div class="nivel-bar-fill fill-${niv.clave}" style="width:${niv.pct}%"></div>
-            </div>
-            <span class="nivel-pct">${niv.pct}%</span>
-          </div>
-        </div>
-      </td>
     </tr>`;
   }).join('');
 
@@ -645,7 +580,6 @@ function renderTabla(correos) {
       <th class="th-remite">Remitente</th>
       <th class="th-fecha">Fecha</th>
       <th>Clasificación</th>
-      <th class="th-nivel">Nivel de Confianza</th>
     </tr></thead>
     <tbody>${filas}</tbody>
   </table>`;
@@ -680,7 +614,7 @@ async function clasificarTexto() {
   const clasEl = document.getElementById('r-clas');
   if (clasEl) clasEl.style.display = 'none';
 
-  ['r-conf', 'r-bar-wrap', 'r-sep', 'r-desc', 'r-tags'].forEach(id => {
+  ['r-sep', 'r-desc'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.style.display = 'none';
   });
@@ -732,42 +666,14 @@ function mostrarResultado(d) {
     clasEl.style.display = '';
   }
 
-  const confEl = document.getElementById('r-conf');
-  if (confEl) {
-    confEl.textContent = `${d.confianza ?? '—'}% de confianza`;
-    confEl.style.display = '';
-  }
-
-  const barWrap = document.getElementById('r-bar-wrap');
-  const barFill = document.getElementById('r-bar-fill');
-  if (barWrap && barFill) {
-    barFill.className = 'result-bar-fill' + (clsKey ? ` ${clsKey}` : '');
-    barFill.style.width = (d.confianza || 0) + '%';
-    barWrap.style.display = '';
-  }
-
   const sep  = document.getElementById('r-sep');
   const desc = document.getElementById('r-desc');
-  if (d.razon) {
+  if (d.descripcion) {
     if (sep)  sep.style.display  = '';
-    if (desc) { desc.textContent = d.razon; desc.style.display = ''; }
+    if (desc) { desc.textContent = d.descripcion; desc.style.display = ''; }
   } else {
     if (sep)  sep.style.display  = 'none';
     if (desc) desc.style.display = 'none';
-  }
-
-  const tagsEl = document.getElementById('r-tags');
-  if (tagsEl) {
-    if (d.palabras_clave && d.palabras_clave.length > 0) {
-      tagsEl.innerHTML = d.palabras_clave.map(p => {
-        const label = typeof p === 'object' ? p.palabra : p;
-        const tipo  = typeof p === 'object' ? (p.tipo || clsKey || '') : (clsKey || '');
-        return `<span class="result-tag ${tipo}">${esc(label)}</span>`;
-      }).join('');
-      tagsEl.style.display = '';
-    } else {
-      tagsEl.style.display = 'none';
-    }
   }
 
   const btnAceptar = document.getElementById('btn-aceptar');

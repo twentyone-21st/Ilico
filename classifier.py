@@ -674,6 +674,7 @@ def _dataset_interno():
     ] * 7
 
     ham_personal = [
+        # Mensajes formales y de coordinación
         "Hola, te confirmo la reunión del viernes a las 3pm en la oficina central",
         "Adjunto el informe mensual de ventas para tu revisión antes de la junta",
         "Buenos días, necesito que me envíes el contrato firmado antes del mediodía",
@@ -686,7 +687,39 @@ def _dataset_interno():
         "Buenas tardes, ¿podemos reagendar la llamada para el miércoles por la tarde?",
         "Te escribo para informarte que cambié mi número de teléfono al 849-312-5678",
         "Feliz cumpleaños, que tengas un excelente día rodeado de tus seres queridos",
-    ] * 5
+        # Mensajes casuales entre amigos
+        "Oye, ¿nos reunimos el sábado para ver la película? Avísame si puedes ir",
+        "Bro, ¿vas a la fiesta de Carlos el viernes? Dime para ir juntos y buscarte",
+        "Hola amiga, hace mucho tiempo que no nos vemos. ¿Cómo estás? Cuéntame todo",
+        "¿Qué vas a hacer este fin de semana? Podríamos salir a comer algo por ahí",
+        "Oye, ¿viste el partido anoche? Estuvo increíble, el Licey ganó en la novena",
+        "Sam, ¿te acuerdas de mí? Estudiamos juntos en el ITLA. Te vi en Instagram",
+        "Hola, te invito a mi cumpleaños el próximo viernes. Espero que puedas venir",
+        "¿Puedes traer palomitas esta noche? Vamos a ver una peli. Empieza a las 8pm",
+        "Hace mucho que no hablamos, ¿cómo te ha ido? Cuéntame qué hay de nuevo",
+        "Oye compa, ¿me puedes dar el teléfono del profe? Necesito hablar con él hoy",
+        "¿Viste lo que pusieron en el grupo de WhatsApp? Dicen que mañana no hay clases",
+        "Te cuento que me fue muy bien en el examen final, saqué un 95. Gracias por todo",
+        "¿Qué tal si hacemos una videollamada esta semana para ponernos al día?",
+        "Hola vecina, ¿sabe si mañana habrá agua? Estoy llenando el tanque por si acaso",
+        "El grupo de la universidad se va a reunir el jueves a las 6pm. ¿Confirmas?",
+        # Mensajes de familia
+        "Mami, ya salí del trabajo. Paso por el supermercado y llego en unos 20 minutos",
+        "Prima, te quiero mucho. Cuídate y nos vemos el domingo en casa de la abuela",
+        "Hola amor, ¿ya llegaste bien a la casa? Avísame cuando puedas",
+        "Ma, llegué bien. El viaje estuvo tranquilo. Te llamo mañana con más calma",
+        "Hola tío, feliz día del padre. Gracias por todo lo que has hecho por nosotros",
+        "Gordo, te extrañamos. Recupérate pronto que aquí te estamos esperando",
+        "Mi amor, ya estoy en camino. ¿Quieres que traiga algo de comer para la cena?",
+        "Papá, ¿cómo está la rodilla? Espero que el médico te haya dado buenas noticias",
+        "Buenas noches familia. Que todos descansen y mañana nos vemos tempranito",
+        "Hermano, ¿puedes pasar a recogerme en la UASD a las 5pm? Gracias de antemano",
+        "Mariana, ¿qué dices si nos reunimos mañana en tu casa para hacer la tarea?",
+        "Podemos hacer palomitas y beber refresco. Hace mucho tiempo que no nos vemos",
+        "Disculpa que no te había contestado, estaba en clases todo el día. ¿Qué pasó?",
+        "Hola compadre, ¿cómo está la familia? Aquí todos bien gracias a Dios. Saludos",
+        "Buenas, ¿sabes si el profe canceló la clase de mañana? No vi el aviso por ningún lado",
+    ] * 7
 
     ham_redes_sociales = [
         "Facebook: Carlos Méndez te envió una solicitud de amistad",
@@ -893,7 +926,7 @@ def _dataset_interno():
         "Ganamos juntos la lotería internacional para cobrar necesitas depositar los impuestos primero",
         "Quiero casarme contigo pero necesito dinero para los papeles de migración ayúdame por favor",
         "Tengo sentimientos profundos por ti solo necesito un pequeño préstamo para la emergencia médica",
-    ] * 7
+    ] * 5
 
     spam_fraude_inversion = [
         "Invierte en Bitcoin y duplica tu dinero en 48 horas garantizado por expertos financieros",

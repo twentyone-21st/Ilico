@@ -177,12 +177,13 @@ function _precargarOtraCategoria() {
  * @param {boolean} forzar Si true fuerza recarga ignorando el cache del servidor.
  */
 async function cargarCorreos(forzar = false) {
+  const tc  = document.getElementById('tabla-contenido');
   const btn = document.getElementById('btn-cargar');
+  if (!tc) return;
   if (btn) { btn.disabled = true; btn.textContent = 'Analizando...'; }
 
   if (!todosLosCorreos.length) {
-    document.getElementById('tabla-contenido').innerHTML =
-      '<div class="loading"><div class="spinner"></div>Cargando correos...</div>';
+    tc.innerHTML = '<div class="loading"><div class="spinner"></div>Cargando correos...</div>';
   }
 
   try {
@@ -191,13 +192,11 @@ async function cargarCorreos(forzar = false) {
     const r = await fetch(url);
 
     if (r.status === 401) {
-      document.getElementById('tabla-contenido').innerHTML =
-        '<div class="empty"><div class="empty-icon">🔒</div><div>Conecta tu Gmail para comenzar</div></div>';
+      tc.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="40" height="40" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-lock"/></svg></div><div>Conecta tu Gmail para comenzar</div></div>';
       return;
     }
     if (r.status === 503) {
-      document.getElementById('tabla-contenido').innerHTML =
-        '<div class="loading"><div class="spinner"></div>El modelo de IA está iniciando, espera un momento...</div>';
+      tc.innerHTML = '<div class="loading"><div class="spinner"></div>El modelo de IA está iniciando, espera un momento...</div>';
       setTimeout(() => cargarCorreos(forzar), 4000);
       return;
     }
@@ -217,9 +216,9 @@ async function cargarCorreos(forzar = false) {
     iniciarAutoRefresh();
 
   } catch {
-    if (!todosLosCorreos.length)
-      document.getElementById('tabla-contenido').innerHTML =
-        '<div class="empty"><div class="empty-icon">⚠️</div><div>Error al conectar con Gmail</div></div>';
+    if (!todosLosCorreos.length && tc)
+      tc.innerHTML =
+        '<div class="empty"><div class="empty-icon"><svg width="40" height="40" fill="none" stroke="#ffa502" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-warn"/></svg></div><div>Error al conectar con Gmail</div></div>';
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = 'Actualizar'; }
     const btnL = document.getElementById('btn-limpiar');
@@ -473,7 +472,7 @@ function mostrarBandejaVacia() {
   const nom = categoriaActiva === 'archivados' ? 'archivados'
             : categoriaActiva === 'cuarentena'  ? 'restringidos'
             : 'en la bandeja principal';
-  if (tc) tc.innerHTML = `<div class="empty"><div class="empty-icon">📭</div><div>No hay correos ${nom}.</div></div>`;
+  if (tc) tc.innerHTML = `<div class="empty"><div class="empty-icon"><svg width="40" height="40" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-mail"/></svg></div><div>No hay correos ${nom}.</div></div>`;
   const badge = document.getElementById('badge-' + categoriaActiva);
   if (badge) badge.textContent = '0';
 }
@@ -498,13 +497,13 @@ function badgeInfo(clas) {
 function _secBadgeTabla(seg) {
   if (!seg) return '';
   const cfg = {
-    peligro:     { icon: '🚨', label: 'Peligro' },
-    advertencia: { icon: '⚠️',  label: 'Advertencia' },
-    seguro:      { icon: '🛡️',  label: 'Seguro' },
+    peligro:     { label: 'Peligro' },
+    advertencia: { label: 'Advertencia' },
+    seguro:      { label: 'Seguro' },
   };
   const c = cfg[seg.nivel];
   if (!c) return '';
-  return `<div class="sec-badge ${esc(seg.nivel)}">${c.icon} ${c.label}</div>`;
+  return `<div class="sec-badge ${esc(seg.nivel)}">${c.label}</div>`;
 }
 
 /**
@@ -522,13 +521,13 @@ function _renderSecModal(seg) {
   sec.style.display = '';
 
   const nivelCfg = {
-    peligro:     { icon: '🚨', texto: 'PELIGRO — Amenaza detectada' },
-    advertencia: { icon: '⚠️',  texto: 'ADVERTENCIA — Verificar remitente' },
-    seguro:      { icon: '🛡️',  texto: 'SEGURO — Sin amenazas detectadas' },
+    peligro:     { texto: 'PELIGRO — Amenaza detectada' },
+    advertencia: { texto: 'ADVERTENCIA — Verificar remitente' },
+    seguro:      { texto: 'SEGURO — Sin amenazas detectadas' },
   };
-  const cfg = nivelCfg[seg.nivel] || { icon: '❓', texto: 'Desconocido' };
+  const cfg = nivelCfg[seg.nivel] || { texto: 'Desconocido' };
 
-  document.getElementById('sec-nivel-icon').textContent  = cfg.icon;
+  document.getElementById('sec-nivel-icon').textContent  = '';
   const tEl = document.getElementById('sec-nivel-texto');
   tEl.textContent  = cfg.texto;
   tEl.className    = `modal-security-titulo ${seg.nivel || ''}`;
@@ -616,7 +615,7 @@ function parseFechaOrden(fechaStr) {
 function renderTabla(correos) {
   const tc = document.getElementById('tabla-contenido');
   if (!correos.length) {
-    tc.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div>No hay correos para mostrar.</div></div>';
+    tc.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="40" height="40" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-mail"/></svg></div><div>No hay correos para mostrar.</div></div>';
     return;
   }
 
@@ -909,11 +908,11 @@ async function abrirCorreo(id) {
     } else if (d.cuerpo && d.cuerpo.trim()) {
       body.innerHTML = `<div class="modal-cuerpo-text">${esc(d.cuerpo)}</div>`;
     } else {
-      body.innerHTML = '<div class="empty"><div class="empty-icon">📭</div><div>Sin contenido de texto.</div></div>';
+      body.innerHTML = '<div class="empty"><div class="empty-icon"><svg width="40" height="40" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-mail"/></svg></div><div>Sin contenido de texto.</div></div>';
     }
   } catch {
     document.getElementById('modal-body').innerHTML =
-      '<div class="empty"><div class="empty-icon">⚠️</div><div>No se pudo cargar el correo.</div></div>';
+      '<div class="empty"><div class="empty-icon"><svg width="40" height="40" fill="none" stroke="#ffa502" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-warn"/></svg></div><div>No se pudo cargar el correo.</div></div>';
   }
 
   if (cache.clasificacion && cache.clasificacion !== 'INDETERMINADO') {
@@ -1254,6 +1253,6 @@ async function limpiarBandeja() {
   } catch {
     mostrarToast('Error al conectar con el servidor.');
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = '🧹 Limpiar SPAM'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-bug"/></svg> Limpiar SPAM'; }
   }
 }

@@ -24,6 +24,9 @@
     <symbol id="ico-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
     <symbol id="ico-teach" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></symbol>
     <symbol id="ico-bug" viewBox="0 0 24 24"><path d="M8 2l1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 4-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17 17c2.3.1 4 1.9 4 4"/></symbol>
+    <symbol id="ico-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+    <symbol id="ico-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="ico-close" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></symbol>
   </svg>
 
   <!-- SIDEBAR: navegación lateral con categorías de bandeja y herramientas -->
@@ -45,7 +48,7 @@
 
     <nav class="nav">
       <div class="nav-label">Bandeja</div>
-      <button class="nav-categoria active" onclick="cambiarCategoria('principal', this)">
+      <button class="nav-categoria{% if autenticado %} active{% endif %}" onclick="cambiarCategoria('principal', this)">
         <svg class="nav-ico"><use href="#ico-inbox"/></svg>
         <span class="nav-text">Principal</span>
         <span class="cat-badge" id="badge-principal">—</span>
@@ -76,9 +79,10 @@
   <!-- /SIDEBAR -->
 
   <!-- LAYOUT PRINCIPAL: columna flex que contiene topbar y contenido desplazable -->
-  <div class="content-main">
+  <div class="content-main{% if not autenticado %} no-auth{% endif %}">
 
     <!-- TOPBAR: título de sección activa y badge del usuario autenticado -->
+    {% if autenticado %}
     <header class="topbar">
       <button class="btn-hamburger" id="btn-hamburger" onclick="toggleSidebar()" aria-label="Abrir menú">
         <span></span><span></span><span></span>
@@ -94,6 +98,7 @@
         {% endif %}
       </div>
     </header>
+    {% endif %}
     <!-- /TOPBAR -->
 
     <main class="main">
@@ -104,7 +109,9 @@
         <!-- BANNER: conexión Gmail (visible solo cuando el usuario no está autenticado) -->
         {% if not autenticado %}
         <div class="connect-banner">
-          <div class="connect-icon">📬</div>
+          <div class="connect-icon">
+            <svg width="56" height="56" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-mail"/></svg>
+          </div>
           <div class="connect-title">Conecta tu Gmail</div>
           <div class="connect-sub">Autoriza el acceso para que Ilico analice y clasifique tus correos con inteligencia artificial.</div>
           <a href="/auth/gmail" class="btn-google">
@@ -121,6 +128,7 @@
         <!-- /BANNER -->
 
         <!-- TABLA: contenedor principal de la lista de correos analizados -->
+        {% if autenticado %}
         <div class="table-wrap">
           <div class="table-header">
             <div style="display:flex;align-items:center;gap:10px;">
@@ -144,12 +152,15 @@
           <div class="table-scroll-wrap">
             <div id="tabla-contenido">
               <div class="empty">
-                <div class="empty-icon">📭</div>
+                <div class="empty-icon">
+                <svg width="40" height="40" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-mail"/></svg>
+              </div>
                 <div>Cargando tus correos...</div>
               </div>
             </div>
           </div>
         </div>
+        {% endif %}
         <!-- /TABLA -->
 
       </section>
@@ -257,7 +268,9 @@
               <span id="modal-badge"></span>
               <span class="modal-razon" id="modal-razon"></span>
             </div>
-            <button class="modal-close" onclick="cerrarModalBtn()">✕</button>
+            <button class="modal-close" onclick="cerrarModalBtn()">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-close"/></svg>
+            </button>
           </div>
         </div>
         <div class="modal-meta" id="modal-meta">

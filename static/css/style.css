@@ -633,7 +633,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   margin-bottom: 24px;
 }
 
-.connect-icon  { font-size: 56px; margin-bottom: 16px; }
+.connect-icon  { display: flex; justify-content: center; margin-bottom: 16px; }
 .connect-title { font-family: var(--font-display); font-size: 26px; font-weight: 800; margin-bottom: 8px; }
 .connect-sub   { color: var(--text-1); font-size: 15px; margin-bottom: 28px; max-width: 400px; margin-inline: auto; line-height: 1.6; }
 
@@ -741,6 +741,15 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   margin-left: 298px; /* 18px offset + 260px sidebar + 20px gap */
   width: calc(100% - 298px);
   padding-top: 120px; /* 18px topbar top + 84px topbar height + 18px gap */
+}
+.content-main.no-auth {
+  padding-top: 18px;
+}
+.content-main.no-auth .main {
+  padding: 0 18px 18px 0;
+}
+.content-main.no-auth .connect-banner {
+  margin-bottom: 0;
 }
 
 /* == BOTÓN HAMBURGER (oculto en desktop) == */

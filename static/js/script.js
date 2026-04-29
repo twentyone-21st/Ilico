@@ -46,6 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await getCSRFToken();
   cargarPerfil();
   cargarStats();
+  _refrescarBadges();
   await sincronizarCorreccionesAlServidor();
   cargarChips();
   selTipo('spam');
@@ -104,6 +105,23 @@ function detenerAutoRefresh() {
     clearInterval(intervaloAuto);
     intervaloAuto = null;
   }
+}
+
+function _refrescarBadges() {
+  ['principal', 'archivados', 'cuarentena'].forEach(cat => {
+    fetch('/api/correos/cache?categoria=' + encodeURIComponent(cat))
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (!d) return;
+        if (d.stats && d.stats.total !== undefined) {
+          actualizarBadge(cat, d.stats);
+        } else if (d.vacio || (Array.isArray(d.correos) && d.correos.length === 0 && !d.loading)) {
+          const el = document.getElementById('badge-' + cat);
+          if (el) el.textContent = '—';
+        }
+      })
+      .catch(() => {});
+  });
 }
 
 /**
@@ -250,15 +268,8 @@ function iniciarAutoRefresh() {
         fetch('/api/correos?refresh=0&categoria=' + encodeURIComponent(categoriaActiva)).catch(() => {});
       }
 
-      // Actualizar badges de las otras dos categorías en segundo plano
-      ['principal', 'archivados', 'cuarentena']
-        .filter(c => c !== categoriaActiva)
-        .forEach(cat => {
-          fetch('/api/correos/cache?categoria=' + encodeURIComponent(cat))
-            .then(r => r.ok ? r.json() : null)
-            .then(d => { if (d && d.stats) actualizarBadge(cat, d.stats); })
-            .catch(() => {});
-        });
+      // Actualizar badges de todas las categorías en segundo plano
+      _refrescarBadges();
 
       if (!d.correos || !d.correos.length) return;
 
@@ -474,7 +485,7 @@ function mostrarBandejaVacia() {
             : 'en la bandeja principal';
   if (tc) tc.innerHTML = `<div class="empty"><div class="empty-icon"><svg width="40" height="40" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-mail"/></svg></div><div>No hay correos ${nom}.</div></div>`;
   const badge = document.getElementById('badge-' + categoriaActiva);
-  if (badge) badge.textContent = '0';
+  if (badge) badge.textContent = '—';
 }
 
 /**

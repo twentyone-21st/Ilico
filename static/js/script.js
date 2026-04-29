@@ -251,6 +251,16 @@ function iniciarAutoRefresh() {
         fetch('/api/correos?refresh=0&categoria=' + encodeURIComponent(categoriaActiva)).catch(() => {});
       }
 
+      // Actualizar badges de las otras dos categorías en segundo plano
+      ['principal', 'archivados', 'cuarentena']
+        .filter(c => c !== categoriaActiva)
+        .forEach(cat => {
+          fetch('/api/correos/cache?categoria=' + encodeURIComponent(cat))
+            .then(r => r.ok ? r.json() : null)
+            .then(d => { if (d && d.stats) actualizarBadge(cat, d.stats); })
+            .catch(() => {});
+        });
+
       if (!d.correos || !d.correos.length) return;
 
       if (d.correos.length > 0) {
@@ -434,7 +444,7 @@ async function cargarStats() {
 function actualizarBadge(categoria, stats) {
   const el = document.getElementById('badge-' + categoria);
   if (el && stats && stats.total !== undefined)
-    el.textContent = stats.total;
+    el.textContent = stats.total === 0 ? '—' : stats.total;
 }
 
 /**
@@ -578,6 +588,28 @@ function formatearFechaLocal(fechaStr) {
 }
 
 /**
+ * @brief Parsea la fecha de un correo a timestamp para ordenación.
+ * @param {string} fechaStr Fecha en formato 'DD mes YYYY, HH:MM'.
+ * @return {number} Timestamp en ms, o 0 si no se puede parsear.
+ */
+function parseFechaOrden(fechaStr) {
+  if (!fechaStr) return 0;
+  try {
+    const partes = fechaStr.match(/(\d+)\s+(\w+)\s+(\d+),\s+(\d+):(\d+)/);
+    if (!partes) return 0;
+    const meses = { ene:0, feb:1, mar:2, abr:3, may:4, jun:5,
+                    jul:6, ago:7, sep:8, oct:9, nov:10, dic:11 };
+    return new Date(
+      parseInt(partes[3]),
+      meses[partes[2].toLowerCase()] ?? 0,
+      parseInt(partes[1]),
+      parseInt(partes[4]),
+      parseInt(partes[5])
+    ).getTime();
+  } catch { return 0; }
+}
+
+/**
  * @brief Genera la tabla HTML de correos e inyecta el resultado en el contenedor de la bandeja.
  * @param {Array} correos Lista de objetos correo a mostrar.
  */
@@ -588,10 +620,13 @@ function renderTabla(correos) {
     return;
   }
 
-  _mapaCorreos = {};
-  correos.forEach(c => { _mapaCorreos[c.id] = c; });
+  // Ordenar siempre de más reciente a más antiguo
+  const ordenados = [...correos].sort((a, b) => parseFechaOrden(b.fecha) - parseFechaOrden(a.fecha));
 
-  const filas = correos.map(c => {
+  _mapaCorreos = {};
+  ordenados.forEach(c => { _mapaCorreos[c.id] = c; });
+
+  const filas = ordenados.map(c => {
     const { badge } = badgeInfo(c.clasificacion);
     const dotNuevo = _correosLeidos.has(String(c.id)) ? '' : '<span class="dot-nuevo"></span>';
     return `<tr data-id="${esc(c.id)}" onclick="abrirCorreo(this.dataset.id)">
@@ -817,6 +852,15 @@ async function confirmarEliminar(tipo) {
 async function abrirCorreo(id) {
   _correosLeidos.add(String(id));
   localStorage.setItem('ilico_leidos', JSON.stringify([..._correosLeidos]));
+
+  // Quitar el dot azul de la fila inmediatamente (sin esperar re-render)
+  const fila = document.querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
+  if (fila) { const dot = fila.querySelector('.dot-nuevo'); if (dot) dot.remove(); }
+
+  // Resetear el FPM antes de abrir (evita que quede el estado anterior)
+  const clip = document.getElementById('fpm-clip');
+  if (clip) clip.classList.remove('open', 'closing');
+
   const cache  = _mapaCorreos[id] || {};
   const overlay = document.getElementById('modal-overlay');
   overlay.classList.add('open');
@@ -882,17 +926,29 @@ async function abrirCorreo(id) {
  * @param {MouseEvent} e Evento de clic sobre el overlay.
  */
 function cerrarModal(e) {
-  if (e.target === document.getElementById('modal-overlay')) cerrarModalBtn();
+  // Cerrar si el clic fue en el overlay o en el escenario (fuera del modal y del FPM)
+  if (!e.target.closest('#modal') && !e.target.closest('#fpm')) cerrarModalBtn();
 }
 
 /**
  * @brief Cierra el modal del correo, limpia su contenido y cierra el panel FPM si estaba abierto.
  */
 function cerrarModalBtn() {
-  document.getElementById('modal-overlay').classList.remove('open');
-  document.body.style.overflow = '';
-  document.getElementById('modal-body').innerHTML = '';
-  cerrarFPM();
+  const overlay = document.getElementById('modal-overlay');
+  const clip    = document.getElementById('fpm-clip');
+
+  // Resetear FPM sin animación (desaparece junto al overlay)
+  if (clip) clip.classList.remove('open', 'closing');
+  _fpmCorreoId = null;
+
+  // Animar salida del overlay y luego ocultarlo
+  overlay.style.animation = 'overlayOut 0.25s ease both';
+  setTimeout(() => {
+    overlay.style.animation = '';
+    overlay.classList.remove('open');
+    document.body.style.overflow = '';
+    document.getElementById('modal-body').innerHTML = '';
+  }, 260);
 }
 
 // Cerrar modal con tecla Escape
@@ -907,9 +963,9 @@ document.addEventListener('keydown', e => {
  * @param {string} textoClasificar Texto del correo usado para clasificar.
  */
 function abrirFPM(id, clasificacion, textoClasificar) {
-  _fpmCorreoId        = id;
-  _fpmTipo            = clasificacion === 'SPAM' ? 'spam' : 'ham';
-  window._fpmTexto    = textoClasificar || '';
+  _fpmCorreoId     = id;
+  _fpmTipo         = clasificacion === 'SPAM' ? 'spam' : 'ham';
+  window._fpmTexto = textoClasificar || '';
 
   document.getElementById('fpm-correccion').classList.remove('visible');
   document.getElementById('fpm-ok').classList.remove('visible');
@@ -921,15 +977,22 @@ function abrirFPM(id, clasificacion, textoClasificar) {
   document.getElementById('fpm-pregunta').textContent =
     `Ilico clasificó este correo como ${label}. ¿Es correcto?`;
 
-  document.getElementById('fpm').classList.add('open');
+  // Expandir el clip → el modal se desplaza a la izquierda, FPM aparece
+  const clip = document.getElementById('fpm-clip');
+  if (clip) clip.classList.add('open');
 }
 
 /**
- * @brief Cierra el panel flotante de verificación (FPM) y limpia su estado.
+ * @brief Cierra el FPM con animación de salida; el modal vuelve al centro.
  */
 function cerrarFPM() {
-  document.getElementById('fpm').classList.remove('open');
-  _fpmCorreoId = null;
+  const clip = document.getElementById('fpm-clip');
+  if (!clip || !clip.classList.contains('open')) { _fpmCorreoId = null; return; }
+  clip.classList.add('closing');
+  setTimeout(() => {
+    clip.classList.remove('open', 'closing');
+    _fpmCorreoId = null;
+  }, 430);
 }
 
 /**

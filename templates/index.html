@@ -244,81 +244,83 @@
   </div>
   <!-- /LAYOUT PRINCIPAL -->
 
-  <!-- MODAL: detalle completo del correo seleccionado en la tabla -->
+  <!-- MODAL + FPM: contenedor en duo centrado en pantalla -->
   <div class="modal-overlay" id="modal-overlay" onclick="cerrarModal(event)">
-    <div class="modal" id="modal">
-      <div class="modal-header">
-        <div class="modal-asunto" id="modal-asunto">Cargando...</div>
-        <div class="modal-header-right">
-          <div class="modal-clas-row" id="modal-clas-row">
-            <span id="modal-badge"></span>
-            <span class="modal-razon" id="modal-razon"></span>
+    <div class="modal-stage" id="modal-stage">
+
+      <!-- Modal principal del correo -->
+      <div class="modal" id="modal">
+        <div class="modal-header">
+          <div class="modal-asunto" id="modal-asunto">Cargando...</div>
+          <div class="modal-header-right">
+            <div class="modal-clas-row" id="modal-clas-row">
+              <span id="modal-badge"></span>
+              <span class="modal-razon" id="modal-razon"></span>
+            </div>
+            <button class="modal-close" onclick="cerrarModalBtn()">✕</button>
           </div>
-          <button class="modal-close" onclick="cerrarModalBtn()">✕</button>
         </div>
-      </div>
-      <!-- Metadatos del correo: remitente y fecha -->
-      <div class="modal-meta" id="modal-meta">
-        <div class="modal-meta-item">
-          <span class="modal-meta-label">De</span>
-          <span class="modal-meta-value" id="modal-remite">—</span>
+        <div class="modal-meta" id="modal-meta">
+          <div class="modal-meta-item">
+            <span class="modal-meta-label">De</span>
+            <span class="modal-meta-value" id="modal-remite">—</span>
+          </div>
+          <div class="modal-meta-item">
+            <span class="modal-meta-label">Fecha</span>
+            <span class="modal-meta-value" id="modal-fecha">—</span>
+          </div>
         </div>
-        <div class="modal-meta-item">
-          <span class="modal-meta-label">Fecha</span>
-          <span class="modal-meta-value" id="modal-fecha">—</span>
+        <div class="modal-body" id="modal-body">
+          <div class="modal-loading">
+            <div class="spinner"></div>
+            Cargando contenido del correo...
+          </div>
         </div>
       </div>
 
-      <!-- Cuerpo del correo: texto plano o HTML en iframe sandboxed -->
-      <div class="modal-body" id="modal-body">
-        <div class="modal-loading">
-          <div class="spinner"></div>
-          Cargando contenido del correo...
+      <!-- FPM: clip que se expande para revelar el panel de verificación -->
+      <div class="fpm-clip" id="fpm-clip">
+        <div class="feedback-panel-modal" id="fpm">
+          <div class="fpm-header">
+            <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+            Verificación de clasificación
+          </div>
+          <div class="fpm-body">
+            <div class="fpm-pregunta" id="fpm-pregunta">
+              ¿Ilico clasificó este correo correctamente?
+            </div>
+            <div class="fpm-btn-row">
+              <button class="fpm-btn correcto"   onclick="fpmRespuesta(true)">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Sí, correcto
+              </button>
+              <button class="fpm-btn incorrecto" onclick="fpmRespuesta(false)">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+                No, corregir
+              </button>
+            </div>
+            <div class="fpm-correccion" id="fpm-correccion">
+              <div class="fpm-label">¿Cuál era la clasificación correcta?</div>
+              <div class="fpm-tipo-row">
+                <button class="fpm-tipo-btn spam" id="fpm-tipo-spam" onclick="fpmSelTipo('spam')">SPAM</button>
+                <button class="fpm-tipo-btn ham"  id="fpm-tipo-ham"  onclick="fpmSelTipo('ham')">HAM</button>
+              </div>
+              <div class="fpm-label" style="margin-top:4px">Palabra clave a añadir a la base de datos:</div>
+              <input class="fpm-input" id="fpm-palabra" placeholder="ej: banco, transferencia, saldo (separadas por comas)"
+                     onkeydown="if(event.key==='Enter')fpmGuardar()">
+              <button class="fpm-guardar" onclick="fpmGuardar()">Guardar y entrenar al modelo</button>
+            </div>
+            <div class="fpm-ok" id="fpm-ok">¡Gracias! El modelo ha aprendido de tu corrección.</div>
+          </div>
         </div>
       </div>
+
     </div>
   </div>
   <!-- /MODAL -->
 
 </div>
 <!-- /APP SHELL -->
-
-<!-- PANEL FLOTANTE: verificación de clasificación (FPM) — aparece al abrir un correo -->
-<div class="feedback-panel-modal" id="fpm">
-  <div class="fpm-header">
-    <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
-    Verificación de clasificación
-  </div>
-  <div class="fpm-body">
-    <div class="fpm-pregunta" id="fpm-pregunta">
-      ¿Ilico clasificó este correo correctamente?
-    </div>
-    <div class="fpm-btn-row">
-      <button class="fpm-btn correcto"   onclick="fpmRespuesta(true)">
-        <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-        Sí, correcto
-      </button>
-      <button class="fpm-btn incorrecto" onclick="fpmRespuesta(false)">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
-        No, corregir
-      </button>
-    </div>
-    <!-- Formulario de corrección: visible solo si el usuario indica clasificación incorrecta -->
-    <div class="fpm-correccion" id="fpm-correccion">
-      <div class="fpm-label">¿Cuál era la clasificación correcta?</div>
-      <div class="fpm-tipo-row">
-        <button class="fpm-tipo-btn spam" id="fpm-tipo-spam" onclick="fpmSelTipo('spam')">SPAM</button>
-        <button class="fpm-tipo-btn ham"  id="fpm-tipo-ham"  onclick="fpmSelTipo('ham')">HAM</button>
-      </div>
-      <div class="fpm-label" style="margin-top:4px">Palabra clave a añadir a la base de datos:</div>
-      <input class="fpm-input" id="fpm-palabra" placeholder="ej: banco, transferencia, saldo (separadas por comas)"
-             onkeydown="if(event.key==='Enter')fpmGuardar()">
-      <button class="fpm-guardar" onclick="fpmGuardar()">Guardar y entrenar al modelo</button>
-    </div>
-    <div class="fpm-ok" id="fpm-ok">¡Gracias! El modelo ha aprendido de tu corrección.</div>
-  </div>
-</div>
-<!-- /PANEL FLOTANTE -->
 
 <!-- MENÚ CONTEXTUAL: aparece al hacer clic derecho sobre una fila de correo -->
 <div class="ctx-menu" id="ctx-menu"></div>

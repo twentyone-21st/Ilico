@@ -684,9 +684,26 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 .toast.show { transform: translateY(0); opacity: 1; }
 
 /* == ANIMACIONES == */
-@keyframes spin   { to { transform: rotate(360deg); } }
-@keyframes pulse  { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
-@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin     { to { transform: rotate(360deg); } }
+@keyframes pulse    { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+@keyframes fadeIn   { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Modal / FPM */
+@keyframes overlayIn  { from { opacity: 0; }              to { opacity: 1; } }
+@keyframes overlayOut { from { opacity: 1; }              to { opacity: 0; } }
+@keyframes modalEnter { from { opacity: 0; transform: translateY(20px) scale(0.965); }
+                        to   { opacity: 1; transform: translateY(0)    scale(1); } }
+@keyframes modalExit  { from { opacity: 1; transform: translateY(0)    scale(1); }
+                        to   { opacity: 0; transform: translateY(10px) scale(0.975); } }
+@keyframes fpmEnter   { from { opacity: 0; transform: translateX(24px); }
+                        to   { opacity: 1; transform: translateX(0); } }
+@keyframes fpmExit    { from { opacity: 1; transform: translateX(0); }
+                        to   { opacity: 0; transform: translateX(40px); } }
+/* Variantes móvil */
+@keyframes fpmEnterMobile { from { opacity: 0; transform: translateY(20px); }
+                            to   { opacity: 1; transform: translateY(0); } }
+@keyframes fpmExitMobile  { from { opacity: 1; transform: translateY(0); }
+                            to   { opacity: 0; transform: translateY(20px); } }
 
 /* == INDICADOR DE ÚLTIMA ACTUALIZACIÓN == */
 .last-updated {
@@ -833,16 +850,34 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   .correcciones-grupo { height: 250px; }
   .teach-wrap { grid-template-columns: 1fr; }
 
-  /* Panel FPM: se ancla abajo en vez de a la derecha */
-  .feedback-panel-modal {
-    top: auto;
+  /* Modal stage en móvil: columna, modal ocupa todo el ancho */
+  .modal-stage { flex-direction: column; align-items: stretch; }
+
+  /* FPM clip: fuera del flujo flex, anclado al pie del overlay */
+  .fpm-clip {
+    position: absolute;
     bottom: 12px;
-    right: 12px;
     left: 12px;
-    width: auto;
+    right: 12px;
+    width: auto !important;
+    overflow: visible;
+    pointer-events: none;
+    transition: none;
+  }
+  .fpm-clip.open  { width: auto !important; pointer-events: all; }
+  .fpm-clip.closing { width: auto !important; transition: none; }
+
+  .feedback-panel-modal {
+    width: 100%;
+    margin-left: 0;
     transform: translateY(20px);
   }
-  .feedback-panel-modal.open { transform: translateY(0); }
+  .fpm-clip.open .feedback-panel-modal {
+    animation: fpmEnterMobile 0.30s cubic-bezier(0.34, 1.10, 0.64, 1) 0.18s both;
+  }
+  .fpm-clip.closing .feedback-panel-modal {
+    animation: fpmExitMobile 0.22s ease both;
+  }
 
   /* Banner de conexión Gmail */
   .connect-banner { padding: 32px 20px; }
@@ -1190,9 +1225,20 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   align-items: center;
   justify-content: center;
   padding: 24px;
-  contain: layout style;
 }
-.modal-overlay.open { display: flex; }
+.modal-overlay.open {
+  display: flex;
+  animation: overlayIn 0.25s ease both;
+}
+
+/* Escenario flex que centra el duo modal + FPM */
+.modal-stage {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+  justify-content: center;
+  width: 100%;
+}
 
 .modal {
   background: var(--bg-1);
@@ -1205,6 +1251,27 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   flex-direction: column;
   overflow: hidden;
   contain: layout;
+}
+.modal-overlay.open .modal {
+  animation: modalEnter 0.40s cubic-bezier(0.34, 1.10, 0.64, 1) both;
+}
+
+/* Clip que se expande para revelar el FPM (desplaza el modal a la izquierda) */
+.fpm-clip {
+  flex-shrink: 0;
+  width: 0;
+  overflow: hidden;
+  pointer-events: none;
+  transition: width 0.40s cubic-bezier(0.4, 0, 0.2, 1);
+  align-self: flex-start;
+}
+.fpm-clip.open {
+  width: 300px; /* 280px panel + 20px gap-left */
+  pointer-events: all;
+}
+.fpm-clip.closing {
+  width: 0;
+  transition: width 0.32s cubic-bezier(0.4, 0, 0.2, 1) 0.08s;
 }
 
 .modal-header {
@@ -1337,26 +1404,26 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 }
 
 /* == PANEL FLOTANTE DE VERIFICACIÓN (FPM) == */
+/* En desktop: inline dentro del flex duo, se anima desde la derecha */
 .feedback-panel-modal {
-  position: fixed;
-  top: 50%;
-  right: 32px;
-  transform: translateY(-50%) translateX(20px);
+  position: relative;
   width: 280px;
+  margin-left: 20px;
   background: var(--bg-1);
   border: 1px solid var(--border-md);
   border-radius: var(--radius-lg);
   box-shadow: 0 12px 40px rgba(0,0,0,0.5);
-  z-index: 1100;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s ease;
   overflow: hidden;
+  opacity: 0;
+  transform: translateX(24px);
 }
-.feedback-panel-modal.open {
-  opacity: 1;
-  visibility: visible;
-  transform: translateY(-50%) translateX(0);
+/* Entrada: se activa cuando fpm-clip tiene .open */
+.fpm-clip.open .feedback-panel-modal {
+  animation: fpmEnter 0.34s cubic-bezier(0.34, 1.10, 0.64, 1) 0.24s both;
+}
+/* Salida: se activa cuando fpm-clip tiene .closing */
+.fpm-clip.closing .feedback-panel-modal {
+  animation: fpmExit 0.22s ease both;
 }
 
 .fpm-header {

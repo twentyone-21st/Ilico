@@ -501,23 +501,6 @@ function badgeInfo(clas) {
 }
 
 /**
- * @brief Genera el badge de seguridad para mostrar en la celda de la tabla.
- * @param {Object|undefined} seg Objeto seguridad del correo.
- * @return {string} HTML del badge o cadena vacía.
- */
-function _secBadgeTabla(seg) {
-  if (!seg) return '';
-  const cfg = {
-    peligro:     { label: 'Peligro' },
-    advertencia: { label: 'Advertencia' },
-    seguro:      { label: 'Seguro' },
-  };
-  const c = cfg[seg.nivel];
-  if (!c) return '';
-  return `<div class="sec-badge ${esc(seg.nivel)}">${c.label}</div>`;
-}
-
-/**
  * @brief Rellena la sección de seguridad del modal con los datos del correo.
  * @param {Object|undefined} seg Objeto seguridad del correo.
  */

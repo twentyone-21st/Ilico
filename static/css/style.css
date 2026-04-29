@@ -49,11 +49,6 @@
   --ham-glow:   rgba(46,213,115,0.22);
   --sosp:       #ffa502;
   --sosp-dim:   rgba(255,165,2,0.10);
-  --arriesgado:   #C0152A;
-  --cuestionable: #E8475F;
-  --ambiguo:      #FDD017;
-  --fiable:       #27AE60;
-  --seguro:       #1A7A3F;
   --accent:     #4a6cf7;
   --accent-dim: rgba(74,108,247,0.15);
   --font-display: 'Inter', sans-serif;
@@ -218,8 +213,6 @@ body::before {
 .nav-btn.active             { background: var(--accent-dim); }
 .nav-btn.active .nav-ico    { stroke: var(--accent); }
 .nav-btn.active .nav-text   { color: var(--text-0); font-weight: 600; }
-.nav-btn .icon  { font-size: 17px; width: 24px; text-align: center; }
-
 .nav-ico {
   width: 16px; height: 16px;
   stroke: var(--text-2); stroke-width: 1.75;
@@ -664,7 +657,7 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 }
 
 .empty      { text-align: center; padding: 48px; color: var(--text-2); }
-.empty-icon { font-size: 40px; margin-bottom: 10px; }
+.empty-icon { margin-bottom: 10px; }
 
 /* == NOTIFICACIÓN TOAST == */
 .toast {
@@ -693,8 +686,6 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
 @keyframes overlayOut { from { opacity: 1; }              to { opacity: 0; } }
 @keyframes modalEnter { from { opacity: 0; transform: translateY(20px) scale(0.965); }
                         to   { opacity: 1; transform: translateY(0)    scale(1); } }
-@keyframes modalExit  { from { opacity: 1; transform: translateY(0)    scale(1); }
-                        to   { opacity: 0; transform: translateY(10px) scale(0.975); } }
 @keyframes fpmEnter   { from { opacity: 0; transform: translateX(24px); }
                         to   { opacity: 1; transform: translateX(0); } }
 @keyframes fpmExit    { from { opacity: 1; transform: translateX(0); }
@@ -712,25 +703,6 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   padding: 6px 24px 10px;
   border-bottom: 1px solid var(--border);
 }
-
-/* == SEGURIDAD: badge en tabla == */
-.sec-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 10px;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  letter-spacing: .03em;
-  padding: 2px 7px;
-  border-radius: 99px;
-  margin-top: 5px;
-  white-space: nowrap;
-}
-.sec-badge.peligro  { background: rgba(239,68,68,.15); color: #ef4444; border: 1px solid rgba(239,68,68,.35); }
-.sec-badge.advertencia { background: rgba(234,179,8,.13); color: #ca8a04; border: 1px solid rgba(234,179,8,.3); }
-.sec-badge.seguro   { background: rgba(34,197,94,.1); color: #16a34a; border: 1px solid rgba(34,197,94,.25); }
-
 
 /* == LAYOUT PRINCIPAL (base desktop) == */
 .content-main {

@@ -895,9 +895,21 @@ async function abrirCorreo(id) {
       frame.srcdoc   = d.html_cuerpo;
       frame.onload   = () => {
         try {
-          const h = frame.contentDocument.body.scrollHeight;
-          frame.style.height = Math.min(h + 20, 600) + 'px';
-        } catch {}
+          const doc = frame.contentDocument;
+          // Ocultar scrollbar interno del iframe
+          const s = doc.createElement('style');
+          s.textContent = '::-webkit-scrollbar{display:none}html,body{scrollbar-width:none;-ms-overflow-style:none}';
+          doc.head.appendChild(s);
+          // Auto-altura sin límite: el modal-body es quien hace scroll
+          const autoH = () => {
+            const h = doc.documentElement.scrollHeight || doc.body.scrollHeight || 400;
+            frame.style.height = h + 'px';
+          };
+          autoH();
+          if (window.ResizeObserver) new ResizeObserver(autoH).observe(doc.body);
+        } catch {
+          frame.style.height = '500px';
+        }
       };
     } else if (d.cuerpo && d.cuerpo.trim()) {
       body.innerHTML = `<div class="modal-cuerpo-text">${esc(d.cuerpo)}</div>`;
@@ -966,9 +978,10 @@ function abrirFPM(id, clasificacion, textoClasificar) {
   document.querySelector('.fpm-btn-row').style.display  = 'flex';
   document.getElementById('fpm-palabra').value = '';
 
-  const label = clasificacion === 'SPAM' ? 'SPAM' : clasificacion === 'HAM' ? 'HAM' : 'SOSPECHOSO';
-  document.getElementById('fpm-pregunta').textContent =
-    `Ilico clasificó este correo como ${label}. ¿Es correcto?`;
+  const clsKey = clasificacion === 'SPAM' ? 'spam' : clasificacion === 'SOSPECHOSO' ? 'sosp' : 'ham';
+  const label  = clasificacion === 'SPAM' ? 'SPAM' : clasificacion === 'SOSPECHOSO' ? 'SOSPECHOSO' : 'HAM';
+  document.getElementById('fpm-pregunta').innerHTML =
+    `Ilico clasificó este correo como <span class="fpm-badge ${clsKey}">${label}</span>. ¿Es correcto?`;
 
   // Expandir el clip → el modal se desplaza a la izquierda, FPM aparece
   const clip = document.getElementById('fpm-clip');

@@ -21,8 +21,8 @@ from gmail_service import (
     crear_flujo_oauth, guardar_credenciales_desde_codigo,
     obtener_credenciales, listar_correos, obtener_perfil_usuario,
     obtener_correo_por_id,
-    archivar_correo, desarchivar_correo, mover_a_cuarentena,
-    restaurar_de_cuarentena, eliminar_correo,
+    archivar_correo, desarchivar_correo, mover_a_restringidos,
+    restaurar_de_restringidos, eliminar_correo,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -156,7 +156,7 @@ def _get_user_cache(user_id: str) -> dict:
             _CACHE[user_id] = {
                 "principal":  {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
                 "archivados": {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
-                "cuarentena": {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
+                "restringidos": {"correos": [], "stats": {}, "ts": 0.0, "cargando": False},
             }
         return _CACHE[user_id]
 
@@ -318,7 +318,7 @@ def _cargar_categoria(creds, user_id: str, categoria: str, cantidad: int, reempl
     @brief Descarga correos de Gmail, los clasifica y actualiza el cache del usuario indicado.
     @param creds      Credenciales OAuth del usuario (capturadas antes de lanzar el hilo).
     @param user_id    Email del usuario, clave del cache.
-    @param categoria  'principal', 'archivados' o 'cuarentena'.
+    @param categoria  'principal', 'archivados' o 'restringidos'.
     @param cantidad   Número máximo de correos a obtener.
     @param reemplazar Si True reemplaza el cache completo; si False fusiona con los existentes.
     """
@@ -489,7 +489,7 @@ def api_correos():
         return jsonify({"error": "Modelo no disponible", "correos": [], "stats": {}, "loading": True, "nuevos": 0}), 503
 
     cat    = request.args.get("categoria", "principal")
-    if cat not in ("principal", "archivados", "cuarentena"):
+    if cat not in ("principal", "archivados", "restringidos"):
         cat = "principal"
     forzar = request.args.get("refresh", "0") == "1"
 
@@ -554,7 +554,7 @@ def api_correos_cache():
                         "stale": False, "loading": False, "vacio": True})
 
     cat = request.args.get("categoria", "principal")
-    if cat not in ("principal", "archivados", "cuarentena"):
+    if cat not in ("principal", "archivados", "restringidos"):
         cat = "principal"
 
     user_cache = _get_user_cache(user_id)
@@ -881,16 +881,16 @@ def api_desarchivar(mensaje_id):
     return _ejecutar_accion(desarchivar_correo, mensaje_id, invalidar_cats=["principal"])
 
 
-@app.route("/api/correo/<mensaje_id>/cuarentena", methods=["POST"])
-def api_mover_cuarentena(mensaje_id):
-    """@brief Mueve un correo a Cuarentena (carpeta Spam de Gmail)."""
-    return _ejecutar_accion(mover_a_cuarentena, mensaje_id, invalidar_cats=["cuarentena"])
+@app.route("/api/correo/<mensaje_id>/restringir", methods=["POST"])
+def api_mover_restringidos(mensaje_id):
+    """@brief Mueve un correo a Restringidos (carpeta Spam de Gmail)."""
+    return _ejecutar_accion(mover_a_restringidos, mensaje_id, invalidar_cats=["restringidos"])
 
 
 @app.route("/api/correo/<mensaje_id>/restaurar", methods=["POST"])
 def api_restaurar(mensaje_id):
-    """@brief Restaura un correo de Cuarentena a la bandeja Principal."""
-    return _ejecutar_accion(restaurar_de_cuarentena, mensaje_id, invalidar_cats=["principal"])
+    """@brief Restaura un correo de Restringidos a la bandeja Principal."""
+    return _ejecutar_accion(restaurar_de_restringidos, mensaje_id, invalidar_cats=["principal"])
 
 
 @app.route("/api/correo/<mensaje_id>/eliminar", methods=["POST"])
@@ -918,23 +918,23 @@ def api_limpiar_bandeja():
     ids_ok = []
     for msg_id in ids:
         try:
-            mover_a_cuarentena(creds, msg_id)
+            mover_a_restringidos(creds, msg_id)
             ids_ok.append(msg_id)
             movidos += 1
         except Exception as e:
-            logger.error(f"Error moviendo {msg_id} a cuarentena: {e}")
+            logger.error(f"Error moviendo {msg_id} a restringidos: {e}")
             errores += 1
 
     ids_set = set(ids_ok)
     with _CACHE_LOCK:
         user_cache = _get_user_cache(user_id)
         # Capturar objetos de correo antes de eliminarlos de los buckets origen
-        emails_a_cuarentena, vistos = [], set()
+        emails_a_restringidos, vistos = [], set()
         for cat in ("principal", "archivados"):
             for c in user_cache[cat]["correos"]:
                 cid = c.get("id")
                 if cid in ids_set and cid not in vistos:
-                    emails_a_cuarentena.append(c)
+                    emails_a_restringidos.append(c)
                     vistos.add(cid)
         # Eliminar de principal y archivados
         for cat in ("principal", "archivados"):
@@ -942,12 +942,12 @@ def api_limpiar_bandeja():
                 c for c in user_cache[cat]["correos"] if c.get("id") not in ids_set
             ]
             user_cache[cat]["stats"] = _stats(user_cache[cat]["correos"])
-        # Insertar directamente en cuarentena (aparición inmediata sin reload)
-        if emails_a_cuarentena:
-            ya_en_cuarentena = {c.get("id") for c in user_cache["cuarentena"]["correos"]}
-            nuevos = [c for c in emails_a_cuarentena if c.get("id") not in ya_en_cuarentena]
-            user_cache["cuarentena"]["correos"] = nuevos + user_cache["cuarentena"]["correos"]
-            user_cache["cuarentena"]["stats"] = _stats(user_cache["cuarentena"]["correos"])
+        # Insertar directamente en restringidos (aparición inmediata sin reload)
+        if emails_a_restringidos:
+            ya_en_restringidos = {c.get("id") for c in user_cache["restringidos"]["correos"]}
+            nuevos = [c for c in emails_a_restringidos if c.get("id") not in ya_en_restringidos]
+            user_cache["restringidos"]["correos"] = nuevos + user_cache["restringidos"]["correos"]
+            user_cache["restringidos"]["stats"] = _stats(user_cache["restringidos"]["correos"])
 
     return jsonify({"ok": True, "movidos": movidos, "errores": errores})
 

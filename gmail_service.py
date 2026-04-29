@@ -31,9 +31,13 @@ SCOPES = [
 CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
 
 QUERY_POR_CATEGORIA = {
-    "principal":  "label:INBOX",
-    "archivados": "-label:INBOX -label:DRAFT -label:SENT -label:TRASH -label:SPAM",
-    "cuarentena": "label:SPAM -label:TRASH",
+    "principal":    "label:INBOX",
+    "archivados":   "-label:INBOX -label:DRAFT -label:SENT -label:TRASH -label:SPAM",
+}
+
+# Categorías que filtran por labelIds en lugar de query de texto (más fiable para etiquetas del sistema)
+LABEL_IDS_POR_CATEGORIA = {
+    "restringidos": ["SPAM"],
 }
 
 
@@ -114,12 +118,13 @@ def listar_correos(creds, max_resultados: int = 500, etiqueta: str = "INBOX",
     @param creds          Objeto Credentials del usuario autenticado.
     @param max_resultados Número máximo de correos a obtener.
     @param etiqueta       Parámetro heredado (no usado directamente; se usa 'categoria').
-    @param categoria      'principal' o 'archivados'.
+    @param categoria      'principal', 'archivados' o 'restringidos'.
     @return Lista de dicts de correo ordenada del más reciente al más antiguo.
     """
     try:
-        servicio = obtener_servicio(creds)
-        query    = QUERY_POR_CATEGORIA.get(categoria, "label:INBOX")
+        servicio  = obtener_servicio(creds)
+        query     = QUERY_POR_CATEGORIA.get(categoria, "label:INBOX")
+        label_ids = LABEL_IDS_POR_CATEGORIA.get(categoria)
 
         mensajes = []
         vistos   = set()
@@ -129,10 +134,13 @@ def listar_correos(creds, max_resultados: int = 500, etiqueta: str = "INBOX",
             page_size = min(500, max_resultados - len(vistos))
             kwargs = {
                 "userId":     "me",
-                "q":          query,
                 "maxResults": page_size,
                 "fields":     "messages(id),nextPageToken",
             }
+            if label_ids:
+                kwargs["labelIds"] = label_ids
+            else:
+                kwargs["q"] = query
             if page_token:
                 kwargs["pageToken"] = page_token
 
@@ -345,12 +353,12 @@ def desarchivar_correo(creds, mensaje_id: str):
     return _modificar_etiquetas(creds, mensaje_id, agregar=["INBOX"])
 
 
-def mover_a_cuarentena(creds, mensaje_id: str):
+def mover_a_restringidos(creds, mensaje_id: str):
     """@brief Añade label SPAM y quita INBOX — mueve a la carpeta Spam de Gmail."""
     return _modificar_etiquetas(creds, mensaje_id, agregar=["SPAM"], quitar=["INBOX"])
 
 
-def restaurar_de_cuarentena(creds, mensaje_id: str):
+def restaurar_de_restringidos(creds, mensaje_id: str):
     """@brief Quita label SPAM y añade INBOX — restaura el correo a la bandeja principal."""
     return _modificar_etiquetas(creds, mensaje_id, quitar=["SPAM"], agregar=["INBOX"])
 

@@ -29,7 +29,7 @@ Es el punto de entrada de la aplicación. Sus responsabilidades son:
 
 - Servir la interfaz HTML mediante la ruta `GET /`
 - Gestionar el flujo OAuth2 con Google (`/auth/gmail`, `/auth/callback`, `/auth/logout`)
-- Mantener un **cache en memoria** de tres categorías de correos (`principal`, `archivados` y `cuarentena`) con TTL de 5 minutos
+- Mantener un **cache en memoria** de tres categorías de correos (`principal`, `archivados` y `restringidos`) con TTL de 5 minutos
 - Exponer la **API REST** que consume el frontend
 - Arrancar el modelo en un **hilo daemon** al iniciar, sin bloquear la primera respuesta
 - Cargar y persistir las **palabras de corrección** del usuario en `correcciones_usuario.json`
@@ -109,4 +109,4 @@ Gestiona toda la comunicación con la Gmail API v1:
 - **Descarga paralela**: usa `ThreadPoolExecutor` con 5 hilos para obtener los detalles de múltiples correos simultáneamente
 - **Parseo MIME**: extrae asunto, remitente, fecha, texto plano y HTML del payload anidado
 - **Ordenación cronológica**: convierte las fechas RFC-2822 a Unix timestamp y ordena del más reciente al más antiguo
-- **Acciones**: archiva, desarchiva, mueve a cuarentena, restaura y elimina correos mediante la modificación de etiquetas de Gmail
+- **Acciones**: archiva, desarchiva, mueve a restringidos, restaura y elimina correos mediante la modificación de etiquetas de Gmail

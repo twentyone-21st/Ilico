@@ -89,7 +89,7 @@ function prepararLogout() {
     detenerAutoRefresh();
     todosLosCorreos = [];
     _mapaCorreos    = {};
-    ['badge-principal','badge-archivados','badge-cuarentena'].forEach(id => {
+    ['badge-principal','badge-archivados','badge-restringidos'].forEach(id => {
       const el = document.getElementById(id);
       if (el) el.textContent = '—';
     });
@@ -108,7 +108,7 @@ function detenerAutoRefresh() {
 }
 
 function _refrescarBadges() {
-  ['principal', 'archivados', 'cuarentena'].forEach(cat => {
+  ['principal', 'archivados', 'restringidos'].forEach(cat => {
     fetch('/api/correos/cache?categoria=' + encodeURIComponent(cat))
       .then(r => r.ok ? r.json() : null)
       .then(d => {
@@ -317,7 +317,7 @@ async function cambiarCategoria(categoria, btn) {
   const titulos = {
     principal:  movil ? 'Principal'  : 'Bandeja de entrada · Principal',
     archivados: movil ? 'Archivados' : 'Bandeja de entrada · Archivados',
-    cuarentena: 'Restringidos',
+    restringidos: 'Restringidos',
   };
   document.getElementById('topbar-title').textContent = titulos[categoria] || 'Bandeja de entrada';
 
@@ -481,7 +481,7 @@ function mostrarHoraActualizacion() {
 function mostrarBandejaVacia() {
   const tc  = document.getElementById('tabla-contenido');
   const nom = categoriaActiva === 'archivados' ? 'archivados'
-            : categoriaActiva === 'cuarentena'  ? 'restringidos'
+            : categoriaActiva === 'restringidos'  ? 'restringidos'
             : 'en la bandeja principal';
   if (tc) tc.innerHTML = `<div class="empty"><div class="empty-icon"><svg width="40" height="40" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-mail"/></svg></div><div>No hay correos ${nom}.</div></div>`;
   const badge = document.getElementById('badge-' + categoriaActiva);
@@ -1134,15 +1134,15 @@ function _mostrarCtxMenu(x, y, anchorEl) {
       { icon: ICO_ARCHIVE, label: 'Archivar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/archivar','Correo archivado.')` },
       { sep: true },
       { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },
-      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo restringido.')`, cls: 'ctx-danger' },
+      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/restringir','Correo restringido.')`, cls: 'ctx-danger' },
     ],
     archivados: [
       { icon: ICO_UNARC,   label: 'Desarchivar',         fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/desarchivar','Correo movido a Principal.')` },
       { sep: true },
       { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },
-      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/cuarentena','Correo restringido.')`, cls: 'ctx-danger' },
+      { icon: ICO_BAN,     label: 'Restringir',          fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/restringir','Correo restringido.')`, cls: 'ctx-danger' },
     ],
-    cuarentena: [
+    restringidos: [
       { icon: ICO_RESTORE, label: 'Restaurar',             fn: `_restaurarCorreo('${_ctxCorreoId}')` },
       { sep: true },
       { icon: ICO_TRASH,   label: 'Eliminar',            fn: `_accionCorreo('${_ctxCorreoId}','/api/correo/${_ctxCorreoId}/eliminar','Correo eliminado.')`, cls: 'ctx-danger' },

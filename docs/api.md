@@ -24,7 +24,7 @@ Devuelve los correos clasificados. Lanza una carga desde Gmail si el cache está
 
 | Parámetro | Valores | Descripción |
 |-----------|---------|-------------|
-| `categoria` | `principal` \| `archivados` \| `cuarentena` | Bandeja a consultar |
+| `categoria` | `principal` \| `archivados` \| `restringidos` | Bandeja a consultar |
 | `refresh` | `0` \| `1` | Fuerza recarga ignorando el cache |
 
 **Respuesta:**
@@ -57,10 +57,10 @@ Devuelve el contenido completo de un correo, incluyendo el cuerpo HTML y la clas
 |--------|------|-------------|
 | `POST` | `/api/correo/{id}/archivar` | Quita el label INBOX (archiva) |
 | `POST` | `/api/correo/{id}/desarchivar` | Añade el label INBOX de vuelta |
-| `POST` | `/api/correo/{id}/cuarentena` | Mueve a Spam de Gmail |
+| `POST` | `/api/correo/{id}/restringir` | Mueve a Spam de Gmail |
 | `POST` | `/api/correo/{id}/restaurar` | Restaura de Spam a la bandeja principal |
 | `POST` | `/api/correo/{id}/eliminar` | Mueve a la Papelera de Gmail |
-| `POST` | `/api/correos/limpiar` | Mueve en lote los correos SPAM indicados a Cuarentena |
+| `POST` | `/api/correos/limpiar` | Mueve en lote los correos SPAM indicados a Restringidos |
 
 **Body de `/api/correos/limpiar`:**
 ```json

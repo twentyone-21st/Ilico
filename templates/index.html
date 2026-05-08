@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<!-- HEAD: metadatos, fuentes y hoja de estilos -->
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ilico — Filtro Inteligente de Correo</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+</head>
+<body>
+
+<!-- APP SHELL: contenedor raíz que engloba sidebar y área de contenido -->
+<div class="app-shell">
+
+  <!-- Fondo oscuro que aparece cuando el sidebar está abierto en móvil -->
+  <div class="sidebar-overlay" id="sidebar-overlay" onclick="toggleSidebar()"></div>
+
+  <!-- Iconos reutilizables -->
+  <svg style="display:none">
+    <symbol id="ico-inbox" viewBox="0 0 24 24"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/></symbol>
+    <symbol id="ico-archive" viewBox="0 0 24 24"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></symbol>
+    <symbol id="ico-warn" viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></symbol>
+    <symbol id="ico-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></symbol>
+    <symbol id="ico-teach" viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></symbol>
+    <symbol id="ico-bug" viewBox="0 0 24 24"><path d="M8 2l1.88 1.88"/><path d="M14.12 3.88 16 2"/><path d="M9 7.13v-1a3.003 3.003 0 1 1 6 0v1"/><path d="M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6"/><path d="M12 20v-9"/><path d="M6.53 9C4.6 8.8 3 7.1 3 5"/><path d="M6 13H2"/><path d="M3 21c0-2.1 1.7-3.9 4-4"/><path d="M20.97 5c0 2.1-1.6 3.8-3.5 4"/><path d="M22 13h-4"/><path d="M17 17c2.3.1 4 1.9 4 4"/></symbol>
+    <symbol id="ico-mail" viewBox="0 0 24 24"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></symbol>
+    <symbol id="ico-lock" viewBox="0 0 24 24"><rect width="18" height="11" x="3" y="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></symbol>
+    <symbol id="ico-close" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="M6 6l12 12"/></symbol>
+  </svg>
+
+  <!-- SIDEBAR: navegación lateral con categorías de bandeja y herramientas -->
+  <aside class="sidebar">
+    <div class="logo" onclick="location.reload()">
+      <svg viewBox="0 0 40 40" style="width:36px;height:36px;flex-shrink:0">
+        <rect width="40" height="40" rx="10" fill="#4a6cf7"/>
+        <circle cx="20" cy="10.5" r="3.2" fill="#fff"/>
+        <rect x="10" y="17.5" width="20" height="3" rx="1.5" fill="#fff"/>
+        <rect x="13.5" y="23" width="13" height="3" rx="1.5" fill="#fff"/>
+        <rect x="17" y="28.5" width="6" height="3" rx="1.5" fill="#fff"/>
+      </svg>
+      <div class="logo-text">
+        <span class="logo-name">Ilico</span>
+        <span class="logo-sub">NLP · Machine Learning</span>
+      </div>
+    </div>
+    <div class="sidebar-divider"></div>
+
+    <nav class="nav">
+      <div class="nav-label">Bandeja</div>
+      <button class="nav-categoria{% if autenticado %} active{% endif %}" onclick="cambiarCategoria('principal', this)">
+        <svg class="nav-ico"><use href="#ico-inbox"/></svg>
+        <span class="nav-text">Principal</span>
+        <span class="cat-badge" id="badge-principal">—</span>
+      </button>
+      <button class="nav-categoria" onclick="cambiarCategoria('archivados', this)">
+        <svg class="nav-ico"><use href="#ico-archive"/></svg>
+        <span class="nav-text">Archivados</span>
+        <span class="cat-badge" id="badge-archivados">—</span>
+      </button>
+      <button class="nav-categoria nav-restringidos" onclick="cambiarCategoria('restringidos', this)">
+        <svg class="nav-ico"><use href="#ico-warn"/></svg>
+        <span class="nav-text">Restringidos</span>
+        <span class="cat-badge" id="badge-restringidos">—</span>
+      </button>
+
+      <div class="nav-label" style="margin-top:8px">Herramientas</div>
+      <button class="nav-btn" onclick="mostrarSeccion('clasificar', this)">
+        <svg class="nav-ico"><use href="#ico-search"/></svg>
+        <span class="nav-text">Clasificar texto</span>
+      </button>
+      <button class="nav-btn" onclick="mostrarSeccion('aprender', this)">
+        <svg class="nav-ico"><use href="#ico-teach"/></svg>
+        <span class="nav-text">Enseñar al sistema</span>
+      </button>
+    </nav>
+
+  </aside>
+  <!-- /SIDEBAR -->
+
+  <!-- LAYOUT PRINCIPAL: columna flex que contiene topbar y contenido desplazable -->
+  <div class="content-main{% if not autenticado %} no-auth{% endif %}">
+
+    <!-- TOPBAR: título de sección activa y badge del usuario autenticado -->
+    {% if autenticado %}
+    <header class="topbar">
+      <button class="btn-hamburger" id="btn-hamburger" onclick="toggleSidebar()" aria-label="Abrir menú">
+        <span></span><span></span><span></span>
+      </button>
+      <div class="topbar-title" id="topbar-title">Bandeja de entrada</div>
+      <div class="topbar-right">
+        <div class="user-badge" id="user-badge">
+          <div class="user-dot" id="user-dot" style="background:var(--text-2)"></div>
+          <span id="user-email">Conectando...</span>
+        </div>
+        {% if autenticado %}
+        <a href="/auth/logout" id="btn-logout" class="btn btn-ghost">Cerrar sesión</a>
+        {% endif %}
+      </div>
+    </header>
+    {% endif %}
+    <!-- /TOPBAR -->
+
+    <main class="main">
+
+      <!-- SECCIÓN: BANDEJA DE ENTRADA — lista de correos clasificados -->
+      <section id="sec-bandeja" class="section visible">
+
+        <!-- BANNER: conexión Gmail (visible solo cuando el usuario no está autenticado) -->
+        {% if not autenticado %}
+        <div class="connect-banner">
+          <div class="connect-icon">
+            <svg width="56" height="56" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-mail"/></svg>
+          </div>
+          <div class="connect-title">Conecta tu Gmail</div>
+          <div class="connect-sub">Autoriza el acceso para que Ilico analice y clasifique tus correos con inteligencia artificial.</div>
+          <a href="/auth/gmail" class="btn-google">
+            <svg width="20" height="20" viewBox="0 0 48 48">
+              <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+              <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+              <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+              <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+            </svg>
+            Conectar con Google
+          </a>
+        </div>
+        {% endif %}
+        <!-- /BANNER -->
+
+        <!-- TABLA: contenedor principal de la lista de correos analizados -->
+        {% if autenticado %}
+        <div class="table-wrap">
+          <div class="table-header">
+            <div style="display:flex;align-items:center;gap:10px;">
+              <div class="table-title">Análisis de correos</div>
+              <!-- Indicador "En vivo" visible mientras el polling está activo -->
+              <div id="refresh-indicator" style="display:none;align-items:center;gap:6px;font-size:11px;color:var(--text-2);">
+                <div style="width:7px;height:7px;border-radius:50%;background:var(--ham);box-shadow:0 0 6px var(--ham-glow);animation:pulse 2s infinite;contain:layout;"></div>
+                En vivo
+              </div>
+            </div>
+            <div class="table-actions">
+              <button class="btn-limpiar" id="btn-limpiar" onclick="limpiarBandeja()" style="display:none" {% if not autenticado %}disabled{% endif %}>
+                <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-bug"/></svg>
+                Limpiar SPAM
+              </button>
+            </div>
+          </div>
+          <div class="sidebar-divider"></div>
+
+          <!-- Contenido dinámico: spinner, tabla o estado vacío inyectado por JS -->
+          <div class="table-scroll-wrap">
+            <div id="tabla-contenido">
+              <div class="empty">
+                <div class="empty-icon">
+                <svg width="40" height="40" fill="none" stroke="#a8b0c8" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-mail"/></svg>
+              </div>
+                <div>Cargando tus correos...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        <!-- /TABLA -->
+
+      </section>
+      <!-- /SECCIÓN BANDEJA -->
+
+      <!-- SECCIÓN: CLASIFICAR TEXTO — permite analizar cualquier mensaje manualmente -->
+      <section id="sec-clasificar" class="section">
+        <div class="classify-wrap">
+
+          <!-- Panel izquierdo: entrada de texto -->
+          <div class="classify-left">
+            <div class="panel">
+              <div class="panel-head">
+                <div class="panel-title">Texto a analizar</div>
+              </div>
+              <div class="sidebar-divider"></div>
+              <div class="panel-body">
+                <textarea class="classify-textarea" id="txt-input" placeholder="Escribe o pega aquí el mensaje que quieres clasificar..."></textarea>
+              </div>
+              <div class="panel-foot">
+                <button type="button" class="btn-classify" id="btn-clasificar" onclick="clasificarTexto()">Clasificar</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel derecho: tarjeta de resultado -->
+          <div class="classify-right">
+            <div class="result-card" id="result-card">
+              <div class="result-icon-bg empty" id="r-icon-bg">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--text-2)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </div>
+              <div class="result-label" id="r-clas" style="display:none"></div>
+              <div class="result-empty-msg" id="r-empty-msg">Aún no has introducido un texto para clasificar</div>
+              <div class="result-sep" id="r-sep" style="display:none"></div>
+              <div class="result-desc" id="r-desc" style="display:none"></div>
+              <button class="btn-aceptar" id="btn-aceptar" onclick="aceptarResultado()" style="display:none">Aceptar</button>
+            </div>
+          </div>
+
+        </div>
+      </section>
+      <!-- /SECCIÓN CLASIFICAR -->
+
+      <!-- SECCIÓN: ENSEÑAR AL SISTEMA — palabras clave para ajustar el clasificador -->
+      <section id="sec-aprender" class="section">
+        <div class="feedback-panel">
+          <div class="panel-title">Enseñar al sistema</div>
+          <div class="panel-sub">Agrega o elimina palabras clave para afinar las clasificaciones en tiempo real.</div>
+
+          <div class="teach-wrap">
+            <!-- Panel SPAM -->
+            <div class="teach-col">
+              <div class="teach-panel-head">
+                <span class="teach-panel-title">SPAM</span>
+                <span class="teach-count" id="count-spam">0</span>
+              </div>
+              <div class="teach-divider"></div>
+              <div class="teach-chips-area" id="chips-spam">
+                <span class="teach-empty" id="empty-spam">Sin palabras aún.</span>
+              </div>
+              <div class="teach-input-row">
+                <input class="teach-input" id="teach-input-spam" placeholder="Palabra clave..." onkeydown="if(event.key==='Enter')agregarPalabra('spam')">
+                <button class="teach-btn-add" onclick="agregarPalabra('spam')">Agregar</button>
+              </div>
+              <button class="teach-btn-del" id="del-btn-spam" onclick="toggleModoEliminar('spam')">Eliminar</button>
+            </div>
+
+            <!-- Panel HAM -->
+            <div class="teach-col">
+              <div class="teach-panel-head">
+                <span class="teach-panel-title">HAM</span>
+                <span class="teach-count" id="count-ham">0</span>
+              </div>
+              <div class="teach-divider"></div>
+              <div class="teach-chips-area" id="chips-ham">
+                <span class="teach-empty" id="empty-ham">Sin palabras aún.</span>
+              </div>
+              <div class="teach-input-row">
+                <input class="teach-input" id="teach-input-ham" placeholder="Palabra clave..." onkeydown="if(event.key==='Enter')agregarPalabra('ham')">
+                <button class="teach-btn-add" onclick="agregarPalabra('ham')">Agregar</button>
+              </div>
+              <button class="teach-btn-del" id="del-btn-ham" onclick="toggleModoEliminar('ham')">Eliminar</button>
+            </div>
+          </div>
+        </div>
+      </section>
+      <!-- /SECCIÓN ENSEÑAR -->
+
+    </main>
+  </div>
+  <!-- /LAYOUT PRINCIPAL -->
+
+  <!-- MODAL + FPM: contenedor en duo centrado en pantalla -->
+  <div class="modal-overlay" id="modal-overlay" onclick="cerrarModal(event)">
+    <div class="modal-stage" id="modal-stage">
+
+      <!-- Modal principal del correo -->
+      <div class="modal" id="modal">
+        <div class="modal-header">
+          <div class="modal-asunto" id="modal-asunto">Cargando...</div>
+          <div class="modal-header-right">
+            <div class="modal-clas-row" id="modal-clas-row">
+              <span id="modal-badge"></span>
+              <span class="modal-razon" id="modal-razon"></span>
+            </div>
+            <button class="modal-close" onclick="cerrarModalBtn()">
+              <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-close"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="modal-meta" id="modal-meta">
+          <div class="modal-meta-item">
+            <span class="modal-meta-label">De</span>
+            <span class="modal-meta-value" id="modal-remite">—</span>
+          </div>
+          <div class="modal-meta-item">
+            <span class="modal-meta-label">Fecha</span>
+            <span class="modal-meta-value" id="modal-fecha">—</span>
+          </div>
+        </div>
+        <div class="modal-body" id="modal-body">
+          <div class="modal-loading">
+            <div class="spinner"></div>
+            Cargando contenido del correo...
+          </div>
+        </div>
+      </div>
+
+      <!-- FPM: clip que se expande para revelar el panel de verificación -->
+      <div class="fpm-clip" id="fpm-clip">
+        <div class="feedback-panel-modal" id="fpm">
+          <div class="fpm-header">
+            <svg viewBox="0 0 24 24"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>
+            Verificación de clasificación
+          </div>
+          <div class="fpm-body">
+            <div class="fpm-pregunta" id="fpm-pregunta">
+              ¿Ilico clasificó este correo correctamente?
+            </div>
+            <div class="fpm-btn-row">
+              <button class="fpm-btn correcto"   onclick="fpmRespuesta(true)">
+                <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+                Sí, correcto
+              </button>
+              <button class="fpm-btn incorrecto" onclick="fpmRespuesta(false)">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg>
+                No, corregir
+              </button>
+            </div>
+            <div class="fpm-correccion" id="fpm-correccion">
+              <div class="fpm-label">¿Cuál era la clasificación correcta?</div>
+              <div class="fpm-tipo-row">
+                <button class="fpm-tipo-btn spam" id="fpm-tipo-spam" onclick="fpmSelTipo('spam')">SPAM</button>
+                <button class="fpm-tipo-btn ham"  id="fpm-tipo-ham"  onclick="fpmSelTipo('ham')">HAM</button>
+              </div>
+              <div class="fpm-label" style="margin-top:4px">Palabra clave a añadir a la base de datos:</div>
+              <input class="fpm-input" id="fpm-palabra" placeholder="ej: banco, transferencia, saldo (separadas por comas)"
+                     onkeydown="if(event.key==='Enter')fpmGuardar()">
+              <button class="fpm-guardar" onclick="fpmGuardar()">Guardar y entrenar al modelo</button>
+            </div>
+            <div class="fpm-ok" id="fpm-ok">¡Gracias! El modelo ha aprendido de tu corrección.</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- /MODAL -->
+
+</div>
+<!-- /APP SHELL -->
+
+<!-- MENÚ CONTEXTUAL: aparece al hacer clic derecho sobre una fila de correo -->
+<div class="ctx-menu" id="ctx-menu"></div>
+
+<!-- TOAST: notificación temporal en esquina inferior derecha -->
+<div class="toast" id="toast"></div>
+
+<!-- SCRIPT: lógica de interfaz y comunicación con la API -->
+<script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

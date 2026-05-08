@@ -14,6 +14,7 @@ from flask_talisman import Talisman
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect, CSRFError
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 from classifier import entrenar_modelo, clasificar, MODEL_CACHE
 from security_service import analizar_lote
@@ -29,9 +30,19 @@ logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
+# ProxyFix es obligatorio en Cloud Run y Railway: ambos terminan TLS en su proxy
+# y envían X-Forwarded-Proto al contenedor. Sin esto, url_for genera URLs http://
+# y SESSION_COOKIE_SECURE nunca se activa.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 app.secret_key = os.environ.get("SECRET_KEY", "ilico-dev-2025")
 
-_en_produccion = bool(os.environ.get("RAILWAY_PUBLIC_DOMAIN"))
+# APP_URL: URL pública completa del servicio (ej. https://ilico-xxxx.a.run.app).
+# Soporta Railway (RAILWAY_PUBLIC_DOMAIN) y Cloud Run (K_SERVICE) como fallback.
+_app_url = (
+    os.environ.get("APP_URL") or
+    (f"https://{os.environ.get('RAILWAY_PUBLIC_DOMAIN')}" if os.environ.get("RAILWAY_PUBLIC_DOMAIN") else None)
+)
+_en_produccion = bool(_app_url or os.environ.get("K_SERVICE"))
 app.config.update(
     PERMANENT_SESSION_LIFETIME  = timedelta(days=30),
     SESSION_COOKIE_HTTPONLY     = True,
@@ -397,15 +408,20 @@ def index():
     return render_template("index.html", autenticado=autenticado)
 
 
+def _oauth_redirect_uri() -> str:
+    """Devuelve la URI de callback OAuth correcta para el entorno actual."""
+    if _app_url:
+        return f"{_app_url.rstrip('/')}/auth/callback"
+    return url_for("auth_callback", _external=True)
+
+
 @app.route("/auth/gmail")
 def auth_gmail():
     """
     @brief Inicia el flujo OAuth2 con Google y redirige al usuario a la pantalla de autorización.
     """
     try:
-        railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
-        uri = f"https://{railway}/auth/callback" if railway else url_for("auth_callback", _external=True)
-        flujo = crear_flujo_oauth(uri)
+        flujo = crear_flujo_oauth(_oauth_redirect_uri())
         url, _ = flujo.authorization_url(prompt="consent", access_type="offline")
         return redirect(url)
     except FileNotFoundError as e:
@@ -422,9 +438,7 @@ def auth_callback():
     if not codigo:
         return redirect(url_for("index"))
     try:
-        railway = os.environ.get("RAILWAY_PUBLIC_DOMAIN")
-        uri = f"https://{railway}/auth/callback" if railway else url_for("auth_callback", _external=True)
-        token_dict = guardar_credenciales_desde_codigo(codigo, uri)
+        token_dict = guardar_credenciales_desde_codigo(codigo, _oauth_redirect_uri())
         session["token_data"] = token_dict
         # Guardar email en sesión para usarlo como clave de cache y correcciones
         creds = obtener_credenciales(token_dict)

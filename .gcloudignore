@@ -1,0 +1,37 @@
+.gcloudignore
+.git/
+.claude/
+
+# Credenciales (se inyectan como secretos en Cloud Run)
+credentials.json
+token.json
+.env
+.env.*
+
+# Modelo serializado (se regenera en el contenedor)
+*.pkl
+
+# Datos locales
+*.csv
+*.db
+*.sqlite
+correcciones_usuario.json
+feedback_correos.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+env/
+
+# Modelos de traducción
+nllb_model/
+opus_model/
+
+# MkDocs build
+site/
+
+# Logs
+*.log

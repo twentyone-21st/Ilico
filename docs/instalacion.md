@@ -36,12 +36,15 @@ Crea un archivo `.env` en la raíz con:
 SECRET_KEY=tu_clave_secreta_aqui
 ```
 
-Para producción en Railway, agrega también:
+Para producción en Google Cloud Run, las variables se configuran durante el despliegue:
 
-```env
-GOOGLE_CREDENTIALS_JSON={"web":{"client_id":"...","client_secret":"...",...}}
-RAILWAY_PUBLIC_DOMAIN=tu-dominio.railway.app
+```bash
+gcloud run deploy ilico \
+  --set-env-vars "SECRET_KEY=tu_clave,APP_URL=https://tu-servicio.run.app" \
+  --set-secrets "GOOGLE_CREDENTIALS_JSON=GOOGLE_CREDENTIALS_JSON:latest"
 ```
+
+`GOOGLE_CREDENTIALS_JSON` debe almacenarse en **Secret Manager**, nunca como variable de entorno plana.
 
 ## 5. Ejecutar el servidor
 

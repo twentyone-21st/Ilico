@@ -10,9 +10,9 @@ Ilico se conecta a tu cuenta de Gmail mediante OAuth2 y clasifica automáticamen
 
 | Clasificación | Significado |
 |---------------|-------------|
-| ✅ **HAM** | Correo legítimo |
-| 🚫 **SPAM** | Correo no deseado o peligroso |
-| ⚠️ **SOSPECHOSO** | Requiere revisión manual |
+| <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2ed573" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg> **HAM** | Correo legítimo |
+| <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ff4757" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/></svg> **SPAM** | Correo no deseado o peligroso |
+| <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ffa502" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg> **SOSPECHOSO** | Requiere revisión manual |
 
 ---
 
@@ -27,7 +27,7 @@ Ilico se conecta a tu cuenta de Gmail mediante OAuth2 y clasifica automáticamen
 - **Clasificación manual de textos** con descripción explicativa de por qué el sistema llegó a su conclusión
 - **Análisis de seguridad** por correo: SPF/DKIM/DMARC y verificación de URLs con Google Safe Browsing
 - **Panel en tiempo real** con polling automático cada 5 segundos
-- **Sesión limpia tras cada deploy**: Railway cierra la sesión automáticamente al publicar cambios
+- **Sesión persistente de 30 días**: la cookie de sesión sobrevive reinicios del contenedor
 
 ---
 
@@ -38,7 +38,7 @@ Backend   Flask 3.0 · Python 3.11
 ML/NLP    scikit-learn (TF-IDF + Multinomial Naive Bayes)
 Gmail     Google API v1 · OAuth2
 Frontend  HTML5 · CSS3 · JavaScript vanilla
-Deploy    Railway · Docker · Gunicorn
+Deploy    Google Cloud Run · Docker · Gunicorn
 ```
 
 ---
@@ -52,8 +52,8 @@ ilico_app/
 ├── gmail_service.py      # Integración con la Gmail API
 ├── security_service.py   # Análisis SPF/DKIM/DMARC y Safe Browsing
 ├── requirements.txt      # Dependencias de producción
-├── Dockerfile            # Imagen Docker para Railway/Cloud Run
-├── railway.json          # Configuración de despliegue en Railway
+├── Dockerfile            # Imagen Docker para Google Cloud Run
+├── .gcloudignore         # Exclusiones del contexto de build en Cloud Run
 ├── static/
 │   ├── css/style.css     # Estilos del panel
 │   └── js/script.js      # Lógica del frontend

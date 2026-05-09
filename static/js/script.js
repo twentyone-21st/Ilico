@@ -363,10 +363,11 @@ function mostrarSeccion(id, btn) {
   if (sec) sec.classList.add('visible');
   if (btn) btn.classList.add('active');
 
-  const titulos = { clasificar: 'Clasificar texto', aprender: 'Enseñar al sistema' };
+  const titulos = { clasificar: 'Clasificar texto', aprender: 'Enseñar al sistema', estadisticas: 'Estadísticas' };
   document.getElementById('topbar-title').textContent = titulos[id] || '';
 
   if (id !== 'clasificar') resetResultBox();
+  if (id === 'estadisticas') cargarEstadisticas();
 }
 
 /**
@@ -1261,5 +1262,67 @@ async function limpiarBandeja() {
     mostrarToast('Error al conectar con el servidor.');
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = '<svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 24 24"><use href="#ico-bug"/></svg> Limpiar SPAM'; }
+  }
+}
+
+/* ── ESTADÍSTICAS ── */
+async function cargarEstadisticas() {
+  const btn = document.getElementById('stats-refresh-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Cargando...'; }
+  try {
+    const r = await fetch('/api/stats/detalle');
+    if (!r.ok) throw new Error('No autenticado');
+    const d = await r.json();
+
+    document.getElementById('sc-principal').textContent    = d.totales_bandeja?.principal    ?? '—';
+    document.getElementById('sc-archivados').textContent   = d.totales_bandeja?.archivados   ?? '—';
+    document.getElementById('sc-restringidos').textContent = d.totales_bandeja?.restringidos ?? '—';
+    document.getElementById('sc-total').textContent        = d.total_procesados ?? '—';
+
+    const confEl = document.getElementById('stats-confidence');
+    confEl.innerHTML = '';
+    const confColors = { HAM: 'conf-ham', SPAM: 'conf-spam', SOSPECHOSO: 'conf-sospechoso' };
+    Object.entries(d.confianza_promedio || {}).forEach(([k, v]) => {
+      confEl.innerHTML += `<div class="stats-conf-chip">
+        <span class="stats-conf-val ${confColors[k] || ''}">${v}%</span>
+        <span class="stats-conf-lbl">${k}</span>
+      </div>`;
+    });
+    if (!confEl.innerHTML) confEl.innerHTML = '<span class="stats-empty">Sin datos aún</span>';
+
+    const chartEl = document.getElementById('stats-chart');
+    chartEl.innerHTML = '';
+    const semanas = d.distribucion_semanal || [];
+    const maxVal = Math.max(1, ...semanas.map(s => s.spam + s.ham + s.sospechoso));
+    semanas.forEach(s => {
+      const hSpam = Math.round((s.spam / maxVal) * 90);
+      const hHam  = Math.round((s.ham  / maxVal) * 90);
+      const hSosp = Math.round((s.sospechoso / maxVal) * 90);
+      const lbl   = s.semana === 0 ? 'Esta sem.' : `Hace ${s.semana}s`;
+      chartEl.innerHTML += `<div class="stats-bar-group">
+        <div class="stats-bars">
+          <div class="stats-bar bar-spam" style="height:${hSpam}px" title="SPAM: ${s.spam}"></div>
+          <div class="stats-bar bar-ham"  style="height:${hHam}px"  title="HAM: ${s.ham}"></div>
+          <div class="stats-bar bar-sospechoso" style="height:${hSosp}px" title="Sospechoso: ${s.sospechoso}"></div>
+        </div>
+        <span class="stats-bar-lbl">${lbl}</span>
+      </div>`;
+    });
+    if (!semanas.length) chartEl.innerHTML = '<span class="stats-empty">Sin datos semanales aún</span>';
+
+    const spamEl = document.getElementById('stats-spammers');
+    spamEl.innerHTML = '';
+    (d.top_spammers || []).forEach(s => {
+      spamEl.innerHTML += `<div class="spammer-row">
+        <span class="spammer-count">${s.total}</span>
+        <span class="spammer-email">${s.remite}</span>
+      </div>`;
+    });
+    if (!d.top_spammers?.length) spamEl.innerHTML = '<span class="stats-empty">Sin remitentes SPAM detectados</span>';
+
+  } catch (e) {
+    document.getElementById('stats-chart').innerHTML = '<span class="stats-empty">Inicia sesión para ver estadísticas</span>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Actualizar'; }
   }
 }

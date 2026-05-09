@@ -26,6 +26,7 @@ except ImportError:
 SCOPES = [
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.metadata",
 ]
 
 CREDENTIALS_PATH = Path(__file__).parent / "credentials.json"
@@ -367,6 +368,31 @@ def eliminar_correo(creds, mensaje_id: str):
     """@brief Mueve el correo a la Papelera de Gmail (messages.trash)."""
     servicio = obtener_servicio(creds)
     return servicio.users().messages().trash(userId="me", id=mensaje_id).execute()
+
+
+def activar_gmail_push(creds, topic_name: str) -> dict:
+    """
+    @brief Registra un watch() en Gmail para recibir notificaciones Pub/Sub cuando llegan correos nuevos.
+    El watch expira cada 7 días — debe renovarse periódicamente (Cloud Scheduler lo gestiona).
+    @param creds      Credenciales OAuth del usuario.
+    @param topic_name Nombre completo del topic Pub/Sub (ej. projects/PROJECT/topics/TOPIC).
+    @return Dict con historyId y expiration del watch activo.
+    """
+    servicio = obtener_servicio(creds)
+    body = {
+        "labelIds":  ["INBOX"],
+        "topicName": topic_name,
+    }
+    resultado = servicio.users().watch(userId="me", body=body).execute()
+    logger.info(f"Gmail watch activo — expira: {resultado.get('expiration')}")
+    return resultado
+
+
+def desactivar_gmail_push(creds) -> None:
+    """@brief Cancela el watch() activo en Gmail para el usuario."""
+    servicio = obtener_servicio(creds)
+    servicio.users().stop(userId="me").execute()
+    logger.info("Gmail watch cancelado.")
 
 
 def obtener_perfil_usuario(creds) -> dict:

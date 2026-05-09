@@ -185,12 +185,41 @@ def analizar_intencion(texto: str) -> str:
     return "neutro"
 
 
+_URL_CORTA = re.compile(r'https?://(bit\.ly|tinyurl\.com|t\.co|goo\.gl|ow\.ly|rb\.gy|cutt\.ly|short\.io)\S*', re.I)
+_URGENCIA  = re.compile(r'\b(urgente|inmediato|expira|vence|límite|caduca|ahora|oferta|gratis|premio|ganaste|ganador|click|verifica|confirma|suspendido|bloqueado|restringido)\b', re.I)
+
+def _tokens_feature(texto_original: str) -> str:
+    """
+    @brief Genera tokens sintéticos que codifican señales estadísticas y de intención como features adicionales.
+    Los tokens son aprendidos por TF-IDF igual que palabras normales, mejorando la discriminación del modelo.
+    """
+    tokens = []
+    letras = [c for c in texto_original if c.isalpha()]
+    if letras and sum(1 for c in letras if c.isupper()) / len(letras) > 0.25:
+        tokens.append("__feature_muchas_mayusculas__")
+    signos = texto_original.count("!") + texto_original.count("?")
+    if signos >= 3:
+        tokens.append("__feature_muchos_signos__")
+    if _URL_CORTA.search(texto_original):
+        tokens.append("__feature_url_acortada__")
+    if len(re.findall(r'https?://', texto_original)) >= 3:
+        tokens.append("__feature_multiples_urls__")
+    if _URGENCIA.search(texto_original):
+        tokens.append("__feature_lenguaje_urgente__")
+    if re.search(r'\$[\d,.]+', texto_original):
+        tokens.append("__feature_monto_dinero__")
+    if re.search(r'\b\d{4,}\b', texto_original):
+        tokens.append("__feature_codigo_numerico__")
+    return " ".join(tokens)
+
+
 def preprocesar(texto: str) -> str:
     """
-    @brief Normaliza y tokeniza texto para el vectorizador TF-IDF: minúsculas, URLs, montos, stopwords.
+    @brief Normaliza y tokeniza texto para TF-IDF, añadiendo tokens de feature engineering.
     @param texto Texto crudo del correo.
-    @return Cadena de tokens limpios separados por espacios.
+    @return Cadena de tokens limpios + tokens sintéticos de features.
     """
+    features = _tokens_feature(texto)
     texto = texto.lower()
     texto = re.sub(r'http\S+|www\S+', ' url_enlace ', texto)
     texto = re.sub(r'\$[\d,\.]+',  ' monto_dinero ',  texto)
@@ -198,6 +227,8 @@ def preprocesar(texto: str) -> str:
     texto = re.sub(r'\d+',         ' numero ',         texto)
     texto = re.sub(r'[^\w\s]',     ' ',                texto)
     tokens = [t for t in texto.split() if t not in STOPWORDS_ES and len(t) > 2]
+    if features:
+        tokens.append(features)
     return " ".join(tokens)
 
 
@@ -620,6 +651,40 @@ def entrenar_modelo(forzar: bool = False) -> tuple:
         _t.Thread(target=_mejorar_con_hf, daemon=True).start()
 
     return modelo_base, acc_base
+
+
+_MODELO_LOCK = __import__("threading").Lock()
+
+
+def actualizar_modelo_con_ejemplo(modelo, texto: str, etiqueta: str) -> bool:
+    """
+    @brief Actualiza el clasificador Naive Bayes con un nuevo ejemplo sin reentrenar desde cero.
+    Usa partial_fit() sobre el vocabulario TF-IDF ya entrenado: palabras nuevas se ignoran
+    silenciosamente, pero el ajuste de probabilidades del NB es inmediato.
+    @param modelo   Pipeline entrenado (TF-IDF + NB).
+    @param texto    Texto del correo tal como lo ve el usuario.
+    @param etiqueta 'spam' o 'ham'.
+    @return True si la actualización fue exitosa.
+    """
+    if modelo is None or etiqueta not in ("spam", "ham"):
+        return False
+    try:
+        texto_prep = preprocesar(texto)
+        X = modelo.named_steps["tfidf"].transform([texto_prep])
+        with _MODELO_LOCK:
+            modelo.named_steps["nb"].partial_fit(X, [etiqueta])
+        try:
+            with open(MODEL_CACHE, "rb") as f:
+                datos = pickle.load(f)
+            datos["modelo"] = modelo
+            with open(MODEL_CACHE, "wb") as f:
+                pickle.dump(datos, f)
+        except Exception:
+            pass
+        return True
+    except Exception as e:
+        logger.warning(f"partial_fit fallido: {e}")
+        return False
 
 
 def _dataset_interno():

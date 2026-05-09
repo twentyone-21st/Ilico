@@ -1834,3 +1834,32 @@ input[type="text"]::placeholder { color: var(--text-2); font-family: var(--font-
   .panel { min-height: 300px; }
   .result-card { min-height: 300px; }
 }
+
+/* ── PANEL DE ESTADÍSTICAS ── */
+.stats-panel { padding: 24px 28px; max-width: 860px; }
+.stats-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+.stats-title { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.stats-refresh-btn { font-size: 12px; font-weight: 500; color: var(--accent); background: rgba(74,108,247,0.08); border: 1px solid rgba(74,108,247,0.2); border-radius: 6px; padding: 5px 14px; cursor: pointer; transition: background 0.15s; }
+.stats-refresh-btn:hover { background: rgba(74,108,247,0.18); }
+.stats-section-title { font-size: 11px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--text-3); margin: 28px 0 12px; }
+.stats-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 4px; }
+.stats-card { background: var(--bg-2); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.stats-card-val { font-size: 28px; font-weight: 700; color: var(--text-1); line-height: 1; }
+.stats-card-lbl { font-size: 11px; font-weight: 500; color: var(--text-3); text-align: center; }
+.stats-confidence { display: flex; gap: 10px; flex-wrap: wrap; }
+.stats-conf-chip { display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px 20px; min-width: 110px; }
+.stats-conf-val { font-size: 22px; font-weight: 700; line-height: 1; }
+.stats-conf-lbl { font-size: 11px; font-weight: 500; color: var(--text-3); }
+.conf-ham { color: #2ed573; } .conf-spam { color: #ff4757; } .conf-sospechoso { color: #ffa502; }
+.stats-chart { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding: 0 4px; }
+.stats-bar-group { display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1; }
+.stats-bars { display: flex; align-items: flex-end; gap: 2px; height: 96px; }
+.stats-bar { width: 14px; border-radius: 3px 3px 0 0; min-height: 3px; transition: height 0.3s; }
+.bar-spam { background: #ff4757; } .bar-ham { background: #2ed573; } .bar-sospechoso { background: #ffa502; }
+.stats-bar-lbl { font-size: 10px; color: var(--text-3); white-space: nowrap; }
+.stats-spammers { display: flex; flex-direction: column; gap: 6px; }
+.spammer-row { display: flex; align-items: center; gap: 10px; background: var(--bg-2); border: 1px solid var(--border); border-radius: 8px; padding: 8px 14px; }
+.spammer-count { font-size: 13px; font-weight: 700; color: #ff4757; min-width: 28px; text-align: right; }
+.spammer-email { font-size: 12px; color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stats-empty { font-size: 13px; color: var(--text-3); padding: 16px 0; }
+@media (max-width: 768px) { .stats-cards { grid-template-columns: repeat(2,1fr); } .stats-chart { gap: 4px; } }

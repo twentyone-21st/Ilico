@@ -16,7 +16,7 @@ from flask_limiter.util import get_remote_address
 from flask_wtf.csrf import CSRFProtect, CSRFError
 from werkzeug.middleware.proxy_fix import ProxyFix
 
-from classifier import entrenar_modelo, clasificar, MODEL_CACHE
+from classifier import entrenar_modelo, clasificar, MODEL_CACHE, actualizar_modelo_con_ejemplo
 from security_service import analizar_lote
 from gmail_service import (
     crear_flujo_oauth, guardar_credenciales_desde_codigo,
@@ -24,6 +24,7 @@ from gmail_service import (
     obtener_correo_por_id,
     archivar_correo, desarchivar_correo, mover_a_restringidos,
     restaurar_de_restringidos, eliminar_correo,
+    activar_gmail_push, desactivar_gmail_push,
 )
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -129,7 +130,8 @@ _CORRECCIONES: dict      = {}
 _CORRECCIONES_LOCK       = threading.Lock()
 
 # Directorio de datos persistentes.
-# En Railway: monta un Volumen en /data y añade DATA_DIR=/data a las variables de entorno.
+# En Cloud Run: monta un bucket GCS como volumen en /data (Cloud Run Gen2 + GCS FUSE)
+# y añade DATA_DIR=/data a las variables de entorno.
 # Sin volumen: cae en el directorio de la app (ephemeral, se pierde en cada deploy).
 _DATA_DIR = Path(os.environ.get("DATA_DIR", "")).resolve() \
             if os.environ.get("DATA_DIR") else Path(__file__).parent
@@ -439,6 +441,8 @@ def auth_callback():
         return redirect(url_for("index"))
     try:
         token_dict = guardar_credenciales_desde_codigo(codigo, _oauth_redirect_uri())
+        # Regenerar session ID para prevenir session fixation attack
+        session.clear()
         session["token_data"] = token_dict
         # Guardar email en sesión para usarlo como clave de cache y correcciones
         creds = obtener_credenciales(token_dict)
@@ -712,6 +716,12 @@ def api_feedback():
             args=(texto_fc, tipo, correo_id),
             daemon=True
         ).start()
+        if _MODELO is not None:
+            threading.Thread(
+                target=actualizar_modelo_con_ejemplo,
+                args=(_MODELO, texto_fc, tipo),
+                daemon=True
+            ).start()
 
     return jsonify({
         "ok":         True,
@@ -995,13 +1005,166 @@ def api_reentrenar():
     return jsonify({"ok": True, "mensaje": "Reentrenamiento iniciado."})
 
 
+@app.route("/api/stats/detalle")
+def api_stats_detalle():
+    """
+    @brief Estadísticas detalladas del cache del usuario: distribución semanal, top remitentes SPAM,
+    confianza promedio por categoría y totales por bandeja.
+    """
+    user_id = _get_user_id()
+    if not user_id:
+        return jsonify({"error": "No autenticado"}), 401
+
+    user_cache = _get_user_cache(user_id)
+    with _CACHE_LOCK:
+        todos = []
+        totales_bandeja = {}
+        for cat in ("principal", "archivados", "restringidos"):
+            correos = list(user_cache[cat]["correos"])
+            totales_bandeja[cat] = len(correos)
+            todos.extend(correos)
+
+    if not todos:
+        return jsonify({
+            "distribucion_semanal": [],
+            "top_spammers": [],
+            "confianza_promedio": {},
+            "totales_bandeja": totales_bandeja,
+            "total_procesados": 0,
+        })
+
+    # Distribución semanal (últimas 6 semanas)
+    import time as _time
+    ahora = _time.time()
+    semanas: dict = {}
+    for c in todos:
+        ts = c.get("fecha_ts", 0)
+        if ts == 0:
+            continue
+        semana_idx = int((ahora - ts) // (7 * 86400))
+        if semana_idx > 5:
+            continue
+        key = f"hace_{semana_idx}_semanas" if semana_idx > 0 else "esta_semana"
+        if key not in semanas:
+            semanas[key] = {"spam": 0, "ham": 0, "sospechoso": 0, "semana": semana_idx}
+        clas = c.get("clasificacion", "").upper()
+        if clas == "SPAM":
+            semanas[key]["spam"] += 1
+        elif clas == "HAM":
+            semanas[key]["ham"] += 1
+        elif clas == "SOSPECHOSO":
+            semanas[key]["sospechoso"] += 1
+    distribucion_semanal = sorted(semanas.values(), key=lambda x: x["semana"])
+
+    # Top 10 remitentes SPAM
+    from collections import Counter
+    spam_remitentes = Counter(
+        c.get("remite", "desconocido")
+        for c in todos if c.get("clasificacion") == "SPAM"
+    )
+    top_spammers = [
+        {"remite": r, "total": n}
+        for r, n in spam_remitentes.most_common(10)
+    ]
+
+    # Confianza promedio por clasificación
+    confianza_grupos: dict = {}
+    for c in todos:
+        clas = c.get("clasificacion", "")
+        conf = c.get("confianza", 0)
+        if clas not in confianza_grupos:
+            confianza_grupos[clas] = []
+        confianza_grupos[clas].append(conf)
+    confianza_promedio = {
+        k: round(sum(v) / len(v), 1)
+        for k, v in confianza_grupos.items() if v
+    }
+
+    return jsonify({
+        "distribucion_semanal": distribucion_semanal,
+        "top_spammers":         top_spammers,
+        "confianza_promedio":   confianza_promedio,
+        "totales_bandeja":      totales_bandeja,
+        "total_procesados":     len(todos),
+    })
+
+
+@app.route("/api/push/activar", methods=["POST"])
+def api_push_activar():
+    """
+    @brief Activa Gmail Push Notifications para el usuario autenticado.
+    Requiere que PUBSUB_TOPIC esté configurado como variable de entorno en Cloud Run.
+    """
+    creds = _get_creds()
+    if not creds:
+        return jsonify({"error": "No autenticado"}), 401
+    topic = os.environ.get("PUBSUB_TOPIC", "")
+    if not topic:
+        return jsonify({"error": "PUBSUB_TOPIC no configurado en el servidor"}), 503
+    try:
+        resultado = activar_gmail_push(creds, topic)
+        return jsonify({"ok": True, "expiration": resultado.get("expiration")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/push/desactivar", methods=["POST"])
+def api_push_desactivar():
+    """@brief Cancela el watch() de Gmail Push del usuario autenticado."""
+    creds = _get_creds()
+    if not creds:
+        return jsonify({"error": "No autenticado"}), 401
+    try:
+        desactivar_gmail_push(creds)
+        return jsonify({"ok": True})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route("/api/webhook/gmail", methods=["POST"])
 @csrf.exempt
 def webhook_gmail():
     """
-    @brief Recibe notificaciones push de Gmail. Sin contexto de usuario en webhooks,
-           el cache se actualizará en el próximo TTL de cada usuario.
+    @brief Recibe notificaciones push de Gmail via Google Pub/Sub.
+    Verifica que el request provenga de Google validando el JWT Bearer token.
     """
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        logger.warning("Webhook: request sin token Bearer — rechazado")
+        return "Unauthorized", 401
+
+    token = auth_header.split(" ", 1)[1]
+    try:
+        from google.oauth2 import id_token
+        from google.auth.transport import requests as google_requests
+        claim = id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            audience=os.environ.get("PUBSUB_AUDIENCE", ""),
+        )
+        if claim.get("email") != "gmail-pubsub@system.gserviceaccount.com" and \
+           not claim.get("email", "").endswith(".iam.gserviceaccount.com"):
+            logger.warning(f"Webhook: email inesperado en JWT: {claim.get('email')}")
+            return "Forbidden", 403
+    except Exception as e:
+        logger.warning(f"Webhook: JWT inválido — {e}")
+        return "Unauthorized", 401
+
+    try:
+        envelope = request.get_json(silent=True) or {}
+        data_b64 = envelope.get("message", {}).get("data", "")
+        if data_b64:
+            import base64 as _b64
+            notification = json.loads(_b64.b64decode(data_b64).decode())
+            email_address = notification.get("emailAddress", "")
+            if email_address and email_address in _CACHE:
+                with _CACHE_LOCK:
+                    for cat in _CACHE[email_address]:
+                        _CACHE[email_address][cat]["ts"] = 0.0
+                logger.info(f"Webhook: cache invalidado para {email_address}")
+    except Exception as e:
+        logger.warning(f"Webhook: error procesando payload — {e}")
+
     return "OK", 200
 
 

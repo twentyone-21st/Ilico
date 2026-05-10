@@ -1,0 +1,25 @@
+# == SERVIDOR WEB ==
+flask==3.0.3
+gunicorn==26.0.0
+
+# == COMUNICACIÓN HTTP ==
+requests>=2.33.1
+
+# == MACHINE LEARNING Y NLP ==
+scikit-learn==1.5.1
+datasets==4.8.5
+pandas>=2.0.0
+
+# == GOOGLE API Y OAUTH2 ==
+google-auth==2.32.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+google-api-python-client==2.140.0
+
+# == UTILIDADES ==
+python-dotenv>=1.2.2
+
+# == SEGURIDAD ==
+flask-talisman==1.1.0
+flask-limiter==3.8.0
+flask-wtf==1.2.1

@@ -1,0 +1,62 @@
+# Credenciales y tokens OAuth
+credentials.json
+token.json
+*.env
+.env
+.env.*
+
+# Datos sensibles de usuario
+correcciones_usuario.json
+feedback_correos.json
+traduccion_checkpoint.json
+
+# Modelos de traducción locales
+nllb_model/
+opus_model/
+
+# Datasets de entrenamiento
+*.csv
+*.pkl
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.venv/
+env/
+ENV/
+pip-log.txt
+
+# Builds y distribución
+dist/
+build/
+*.egg-info/
+.eggs/
+
+# Documentación generada
+site/
+
+# Archivos de sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Claude Code
+.claude/
+
+# Logs y runtime
+*.log
+*.pid

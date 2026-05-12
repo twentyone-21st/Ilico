@@ -3,7 +3,7 @@ flask==3.0.3
 gunicorn==26.0.0
 
 # == COMUNICACIÓN HTTP ==
-requests>=2.33.1
+requests>=2.34.0
 
 # == MACHINE LEARNING Y NLP ==
 scikit-learn==1.5.1
